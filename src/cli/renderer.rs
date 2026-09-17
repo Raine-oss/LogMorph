@@ -233,63 +233,62 @@ impl TerminalRenderer {
             );
         }
 
-        let has_frames = !err.sample_trace.frames.is_empty();
-        let has_caused_by = err.sample_trace.caused_by.is_some();
+        let mut key_lines = Vec::new();
+        let mut plugin_frames_printed = 0;
+        for frame in &err.sample_trace.frames {
+            let is_plugin = FrameFilter::is_plugin_frame(frame);
+            let loc = match (&frame.file_name, frame.line_number) {
+                (Some(f), Some(l)) => format!("{}:{}", f, l),
+                (Some(f), None) => f.clone(),
+                _ => if frame.is_native { "Native Method".to_string() } else { "Unknown".to_string() },
+            };
 
-        if has_frames || has_caused_by {
-            let _ = writeln!(out, "  Stack Trace (Key Frames):");
-            let mut plugin_frames_printed = 0;
-            for frame in &err.sample_trace.frames {
-                let is_plugin = FrameFilter::is_plugin_frame(frame);
-                let loc = match (&frame.file_name, frame.line_number) {
-                    (Some(f), Some(l)) => format!("{}:{}", f, l),
-                    (Some(f), None) => f.clone(),
-                    _ => if frame.is_native { "Native Method".to_string() } else { "Unknown".to_string() },
-                };
+            if is_plugin {
+                plugin_frames_printed += 1;
+                key_lines.push(format!(
+                    "    {} {}.{}({})",
+                    self.styler.green("▶"),
+                    self.styler.cyan(&frame.class_name),
+                    frame.method_name,
+                    loc
+                ));
+            } else if plugin_frames_printed < 2 {
+                key_lines.push(format!(
+                    "      {} {}.{}({})",
+                    self.styler.dim("·"),
+                    self.styler.dim(&frame.class_name),
+                    self.styler.dim(&frame.method_name),
+                    self.styler.dim(&loc)
+                ));
+            }
+        }
 
-                if is_plugin {
-                    plugin_frames_printed += 1;
-                    let _ = writeln!(
-                        out,
-                        "    {} {}.{}({})",
+        if let Some(ref caused) = err.sample_trace.caused_by {
+            key_lines.push(format!("    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception)));
+            if let Some(ref cmsg) = caused.exception_message {
+                key_lines.push(format!("      {}", cmsg));
+            }
+            for frame in &caused.frames {
+                if FrameFilter::is_plugin_frame(frame) {
+                    let loc = match (&frame.file_name, frame.line_number) {
+                        (Some(f), Some(l)) => format!("{}:{}", f, l),
+                        _ => "Unknown".to_string(),
+                    };
+                    key_lines.push(format!(
+                        "      {} {}.{}({})",
                         self.styler.green("▶"),
                         self.styler.cyan(&frame.class_name),
                         frame.method_name,
                         loc
-                    );
-                } else if plugin_frames_printed < 2 {
-                    let _ = writeln!(
-                        out,
-                        "      {} {}.{}({})",
-                        self.styler.dim("·"),
-                        self.styler.dim(&frame.class_name),
-                        self.styler.dim(&frame.method_name),
-                        self.styler.dim(&loc)
-                    );
+                    ));
                 }
             }
+        }
 
-            if let Some(ref caused) = err.sample_trace.caused_by {
-                let _ = writeln!(out, "    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception));
-                if let Some(ref cmsg) = caused.exception_message {
-                    let _ = writeln!(out, "      {}", cmsg);
-                }
-                for frame in &caused.frames {
-                    if FrameFilter::is_plugin_frame(frame) {
-                        let loc = match (&frame.file_name, frame.line_number) {
-                            (Some(f), Some(l)) => format!("{}:{}", f, l),
-                            _ => "Unknown".to_string(),
-                        };
-                        let _ = writeln!(
-                            out,
-                            "      {} {}.{}({})",
-                            self.styler.green("▶"),
-                            self.styler.cyan(&frame.class_name),
-                            frame.method_name,
-                            loc
-                        );
-                    }
-                }
+        if !key_lines.is_empty() {
+            let _ = writeln!(out, "  Stack Trace (Key Frames):");
+            for kl in key_lines {
+                let _ = writeln!(out, "{}", kl);
             }
         }
 

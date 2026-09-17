@@ -41,8 +41,8 @@ LogMorph is currently in active development.
 | Platform | CLI Executable | Plugin Native Library |
 | :--- | :--- | :--- |
 | **Linux x86_64** | Supported | Supported |
+| **Linux ARM64 (aarch64)** | Supported | Supported (Oracle Cloud, Ampere) |
 | **Windows x86_64** | Supported | Supported (CLI) |
-| **Linux ARM64** | Planned | Planned |
 | **macOS (Apple Silicon)** | Planned | Planned |
 
 ---
@@ -51,9 +51,9 @@ LogMorph is currently in active development.
 
 Choose the method that matches your server hosting setup:
 
-### Method A: Minecraft Server Plugin (Best for Pterodactyl & Shared Hosting)
+### Method A: Minecraft Server Plugin (Best for Pterodactyl, Oracle Cloud & Shared Hosting)
 
-No SSH or root terminal access required. Works directly inside your server panel.
+No SSH or root terminal access required. Works directly inside your server panel (including ARM64 Ampere instances).
 
 [![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--0.1.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar)
 [![View Release v0.1.0](https://img.shields.io/badge/GitHub-Release_v0.1.0-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/tag/v0.1.0)
@@ -69,24 +69,37 @@ No SSH or root terminal access required. Works directly inside your server panel
 # (or use the shortcut)
 /lm
 
+# Analyze past compressed archived logs (.log.gz)
+/lm archive 2026-09-16-1.log.gz
+
+# Export structured JSON report to plugins/LogMorph/report.json
+/lm export
+
 # View execution summary tables only
 /lm summary
 
 # Filter errors caused by a specific plugin
 /lm plugin WorldGuard
+
+# Show help and list of all plugin commands
+/lm help
 ```
 
 ---
 
 ### Method B: Standalone CLI Binary (VPS, Dedicated Server, or Local PC)
 
-[![Download Linux Binary](https://img.shields.io/badge/Download_Linux-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64)
+[![Download Linux x86_64](https://img.shields.io/badge/Download_Linux_x86__64-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64)
+[![Download Linux ARM64](https://img.shields.io/badge/Download_Linux_ARM64-logmorph--linux--aarch64-D32F2F?style=for-the-badge&logo=arm&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-aarch64)
 [![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe)
 
-#### Linux
+#### Linux (x86_64 or ARM64 / Ampere)
 ```bash
-# Download the v0.1.0 Linux executable
+# For x86_64 Linux:
 curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64
+
+# For ARM64 Linux (Oracle Cloud / Ampere / aarch64):
+curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-aarch64
 
 # Make it executable
 chmod +x logmorph
@@ -116,7 +129,11 @@ LogMorph supports multiple input modes:
   ```bash
   cat logs/latest.log | logmorph analyze
   ```
-- **Compressed Archives**: Reading compressed log archives without manual extraction:
+- **Compressed Archives (`.log.gz`)**: Native real-time streaming decompression:
+  ```bash
+  logmorph analyze logs/2026-09-17-1.log.gz
+  ```
+  Or via pipes:
   ```bash
   zcat logs/2026-09-17-1.log.gz | logmorph analyze
   ```

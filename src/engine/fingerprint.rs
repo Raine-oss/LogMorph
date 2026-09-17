@@ -93,6 +93,7 @@ impl FingerprintGenerator {
         primary_exception: &str,
         plugin_name: Option<&str>,
         top_frame: Option<&StackFrame>,
+        cleaned_message: Option<&str>,
     ) -> u64 {
         let mut hasher = DefaultHasher::new();
 
@@ -113,6 +114,10 @@ impl FingerprintGenerator {
             }
         }
 
+        if let Some(msg) = cleaned_message {
+            msg.hash(&mut hasher);
+        }
+
         hasher.finish()
     }
 
@@ -123,7 +128,13 @@ impl FingerprintGenerator {
         trace: &StackTraceBlock,
     ) -> (ErrorSignatureKey, Option<StackFrame>) {
         let top_frame = FrameFilter::find_top_plugin_frame(trace);
-        let hash = Self::generate_signature(primary_exception, plugin_name, top_frame.as_ref());
+        let cleaned_message = raw_message.map(normalize_dynamic_noise);
+        let hash = Self::generate_signature(
+            primary_exception,
+            plugin_name,
+            top_frame.as_ref(),
+            cleaned_message.as_deref(),
+        );
         let structural_identity = Self::build_structural_identity(
             primary_exception,
             plugin_name,
@@ -160,12 +171,14 @@ mod tests {
             "java.lang.NullPointerException",
             Some("PluginA"),
             Some(&frame),
+            Some("Null pointer"),
         );
 
         let hash2 = FingerprintGenerator::generate_signature(
             "java.lang.NullPointerException",
             Some("PluginA"),
             Some(&frame),
+            Some("Null pointer"),
         );
 
         assert_eq!(hash1, hash2);
@@ -174,9 +187,29 @@ mod tests {
             "java.lang.IllegalArgumentException",
             Some("PluginA"),
             Some(&frame),
+            Some("Null pointer"),
         );
 
         assert_ne!(hash1, hash3);
+    }
+
+    #[test]
+    fn test_different_messages_produce_different_hashes() {
+        let hash_a = FingerprintGenerator::generate_signature(
+            "java.lang.NoClassDefFoundError",
+            Some("PlaceholderAPI"),
+            None,
+            Some("me/pikamug/quests/quests/Quest"),
+        );
+
+        let hash_b = FingerprintGenerator::generate_signature(
+            "java.lang.NoClassDefFoundError",
+            Some("PlaceholderAPI"),
+            None,
+            Some("net/ess3/api/IEssentials"),
+        );
+
+        assert_ne!(hash_a, hash_b);
     }
 
     #[test]

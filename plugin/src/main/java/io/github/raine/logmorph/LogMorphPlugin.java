@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -59,36 +60,109 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
             return true;
         }
 
+        if (args.length > 0) {
+            String firstArg = args[0].toLowerCase();
+            if (firstArg.equals("help") || firstArg.equals("-h") || firstArg.equals("--help") || firstArg.equals("?")) {
+                sendHelp(sender);
+                return true;
+            }
+        }
+
+        File serverRoot = getServer().getWorldContainer();
+        File logsDir = new File(serverRoot, "logs");
+        if (!logsDir.exists()) {
+            logsDir = new File("logs");
+        }
+
+        File targetLogFile = new File(logsDir, "latest.log");
+
+        // Archive Mode
+
+        if (args.length > 0 && args[0].equalsIgnoreCase("archive")) {
+            if (args.length < 2) {
+                sender.sendMessage(ChatColor.RED + "Usage: /lm archive <filename.log.gz>");
+                return true;
+            }
+
+            String archiveName = args[1];
+            File candidate = new File(logsDir, archiveName);
+            if (!candidate.exists() && !archiveName.endsWith(".log.gz")) {
+                candidate = new File(logsDir, archiveName + ".log.gz");
+            }
+
+            if (!candidate.exists()) {
+                sender.sendMessage(ChatColor.RED + "Archived log not found: " + archiveName + " in logs/ directory.");
+                return true;
+            }
+
+            targetLogFile = candidate;
+        }
+
+        if (!targetLogFile.exists()) {
+            sender.sendMessage(ChatColor.RED + "Target log file not found: " + targetLogFile.getName());
+            return true;
+        }
+
+        final String finalLogPath = targetLogFile.getAbsolutePath();
+        final String displayName = targetLogFile.getName();
+
+        // Export Subcommand
+
+        if (args.length > 0 && args[0].equalsIgnoreCase("export")) {
+            sender.sendMessage(ChatColor.GRAY + "Exporting server log analysis to JSON...");
+
+            Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                try {
+                    String json = LogMorphBridge.exportJson(finalLogPath);
+                    if (!getDataFolder().exists()) {
+                        getDataFolder().mkdirs();
+                    }
+                    File outFile = new File(getDataFolder(), "report.json");
+                    try (FileWriter writer = new FileWriter(outFile)) {
+                        writer.write(json);
+                    }
+
+                    if (!isEnabled()) {
+                        return;
+                    }
+
+                    Bukkit.getScheduler().runTask(this, () -> {
+                        if (!isEnabled()) return;
+                        sender.sendMessage(ChatColor.GREEN + "[LogMorph] Successfully exported report to: " + ChatColor.WHITE + "plugins/LogMorph/report.json");
+                    });
+                } catch (Throwable t) {
+                    if (isEnabled()) {
+                        Bukkit.getScheduler().runTask(this, () -> {
+                            sender.sendMessage(ChatColor.RED + "[LogMorph] Export failed: " + t.getMessage());
+                        });
+                    }
+                }
+            });
+            return true;
+        }
+
         boolean summaryOnly = false;
         String pluginFilter = null;
 
-        for (int i = 0; i < args.length; i++) {
+        int startIndex = (args.length > 0 && args[0].equalsIgnoreCase("archive")) ? 2 : 0;
+
+        for (int i = startIndex; i < args.length; i++) {
             String arg = args[i].toLowerCase();
             if (arg.equals("summary") || arg.equals("--summary") || arg.equals("-s")) {
                 summaryOnly = true;
             } else if ((arg.equals("plugin") || arg.equals("--plugin") || arg.equals("-p")) && i + 1 < args.length) {
                 pluginFilter = args[++i];
+            } else {
+                sender.sendMessage(ChatColor.RED + "[LogMorph] Unknown argument '" + args[i] + "'. Type '/lm help' to see available commands.");
+                return true;
             }
         }
 
-        File serverRoot = getServer().getWorldContainer();
-        File logFile = new File(serverRoot, "logs/latest.log");
-
-        if (!logFile.exists()) {
-            logFile = new File("logs/latest.log");
-        }
-
-        if (!logFile.exists()) {
-            sender.sendMessage(ChatColor.RED + "Could not locate logs/latest.log file.");
-            return true;
-        }
-
-        final String finalLogPath = logFile.getAbsolutePath();
         final boolean finalSummaryOnly = summaryOnly;
         final String finalPluginFilter = pluginFilter;
         final boolean isConsole = sender instanceof ConsoleCommandSender;
 
-        sender.sendMessage(ChatColor.GRAY + "Analyzing server logs with LogMorph...");
+        sender.sendMessage(ChatColor.GRAY + "Analyzing " + displayName + " with LogMorph...");
 
         // Async Execution
 
@@ -132,6 +206,18 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
         return true;
     }
 
+    // Help Menu
+
+    private void sendHelp(CommandSender sender) {
+        sender.sendMessage(ChatColor.DARK_AQUA + "=== LogMorph Plugin Commands ===");
+        sender.sendMessage(ChatColor.YELLOW + "/lm" + ChatColor.WHITE + " - Analyze logs/latest.log and display report");
+        sender.sendMessage(ChatColor.YELLOW + "/lm summary" + ChatColor.WHITE + " - Display statistical summary tables only");
+        sender.sendMessage(ChatColor.YELLOW + "/lm archive <file.log.gz>" + ChatColor.WHITE + " - Decompress and analyze archived logs");
+        sender.sendMessage(ChatColor.YELLOW + "/lm plugin <Name>" + ChatColor.WHITE + " - Filter errors caused by a specific plugin");
+        sender.sendMessage(ChatColor.YELLOW + "/lm export" + ChatColor.WHITE + " - Export analysis to plugins/LogMorph/report.json");
+        sender.sendMessage(ChatColor.YELLOW + "/lm help" + ChatColor.WHITE + " - Display this command help menu");
+    }
+
     // Chat Formatter
 
     private String formatForChat(String ansi) {
@@ -144,7 +230,7 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            List<String> options = Arrays.asList("summary", "plugin");
+            List<String> options = Arrays.asList("summary", "plugin", "archive", "export", "help");
             List<String> matches = new ArrayList<>();
             for (String opt : options) {
                 if (opt.startsWith(args[0].toLowerCase())) {
@@ -153,6 +239,27 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
             }
             return matches;
         }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("archive")) {
+            File serverRoot = getServer().getWorldContainer();
+            File logsDir = new File(serverRoot, "logs");
+            if (!logsDir.exists()) {
+                logsDir = new File("logs");
+            }
+            if (logsDir.exists() && logsDir.isDirectory()) {
+                File[] gzFiles = logsDir.listFiles((dir, name) -> name.endsWith(".log.gz"));
+                if (gzFiles != null) {
+                    List<String> matches = new ArrayList<>();
+                    for (File f : gzFiles) {
+                        if (f.getName().toLowerCase().startsWith(args[1].toLowerCase())) {
+                            matches.add(f.getName());
+                        }
+                    }
+                    return matches;
+                }
+            }
+        }
+
         return Collections.emptyList();
     }
 }

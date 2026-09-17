@@ -26,7 +26,11 @@ public class LogMorphBridge {
 
             if (os.contains("linux")) {
                 libName = "liblogmorph.so";
-                resourcePath = "/natives/linux-x86_64/liblogmorph.so";
+                if (arch.contains("aarch64") || arch.contains("arm64")) {
+                    resourcePath = "/natives/linux-aarch64/liblogmorph.so";
+                } else {
+                    resourcePath = "/natives/linux-x86_64/liblogmorph.so";
+                }
             } else if (os.contains("win")) {
                 libName = "logmorph.dll";
                 resourcePath = "/natives/windows-x86_64/logmorph.dll";
@@ -35,7 +39,11 @@ public class LogMorphBridge {
                 resourcePath = "/natives/macos/liblogmorph.dylib";
             } else {
                 libName = "liblogmorph.so";
-                resourcePath = "/natives/linux-x86_64/liblogmorph.so";
+                if (arch.contains("aarch64") || arch.contains("arm64")) {
+                    resourcePath = "/natives/linux-aarch64/liblogmorph.so";
+                } else {
+                    resourcePath = "/natives/linux-x86_64/liblogmorph.so";
+                }
             }
 
             File nativesDir = new File(dataFolder, "natives");
@@ -84,4 +92,6 @@ public class LogMorphBridge {
         String pluginFilter,
         boolean noColor
     );
+
+    public static native String exportJson(String logPath);
 }

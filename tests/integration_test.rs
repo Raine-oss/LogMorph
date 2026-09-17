@@ -279,3 +279,36 @@ fn test_json_schema_roundtrip() {
     assert_eq!(deserialized.aggregated_errors.len(), 1);
     assert_eq!(deserialized.aggregated_errors[0].attribution, AttributionKind::Confirmed);
 }
+
+#[test]
+fn test_compressed_log_gz_reading() {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::fs::File;
+    use std::io::Write;
+
+    let sample_text = "\
+[12:00:00 INFO]: Server starting
+[12:00:01 ERROR]: Something failed
+java.lang.NullPointerException: Null entity
+\tat com.example.plugin.Main.tick(Main.java:30)
+";
+    let gz_path = fixture_path("test_sample.log.gz");
+    {
+        let file = File::create(&gz_path).expect("Failed to create gz file");
+        let mut encoder = GzEncoder::new(file, Compression::default());
+        encoder.write_all(sample_text.as_bytes()).expect("Write failed");
+        encoder.finish().expect("Finish failed");
+    }
+
+    let reader = LogStreamReader::from_path(&gz_path).expect("Should open gz file");
+    let mut engine = AggregationEngine::new();
+    for event in reader {
+        engine.feed_event(event.unwrap());
+    }
+
+    let _ = std::fs::remove_file(&gz_path);
+
+    assert_eq!(engine.stats().total_exceptions, 1);
+    assert_eq!(engine.stats().unique_signatures, 1);
+}

@@ -83,3 +83,59 @@ pub extern "system" fn Java_io_github_raine_logmorph_LogMorphBridge_analyzeLog<'
         Err(_) => std::ptr::null_mut(),
     }
 }
+
+// Export JSON Native
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_raine_logmorph_LogMorphBridge_exportJson<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    log_path: JString<'local>,
+) -> jstring {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let path_str: String = match env.get_string(&log_path) {
+            Ok(js) => js.into(),
+            Err(e) => return format!("{{\"error\": \"Failed to read log path: {}\"}}", e),
+        };
+
+        let path = Path::new(&path_str);
+        if !path.exists() {
+            return format!("{{\"error\": \"Log file not found at: {}\"}}", path.display());
+        }
+
+        let reader = match LogStreamReader::from_path(path) {
+            Ok(r) => r,
+            Err(e) => return format!("{{\"error\": \"Failed to open log file {}: {}\"}}", path.display(), e),
+        };
+
+        let mut engine = AggregationEngine::new();
+        for event_res in reader {
+            match event_res {
+                Ok(event) => engine.feed_event(event),
+                Err(e) => return format!("{{\"error\": \"Stream reading error: {}\"}}", e),
+            }
+        }
+
+        let report = engine.to_report();
+        match serde_json::to_string_pretty(&report) {
+            Ok(json) => json,
+            Err(e) => format!("{{\"error\": \"Serialization error: {}\"}}", e),
+        }
+    }));
+
+    let output_str = match result {
+        Ok(s) => s,
+        Err(_) => {
+            let _ = env.throw_new(
+                "java/lang/RuntimeException",
+                "LogMorph native panic occurred during exportJson",
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    match env.new_string(&output_str) {
+        Ok(js) => js.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
