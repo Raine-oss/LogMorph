@@ -88,23 +88,52 @@ impl TerminalRenderer {
 
     // Padding Helpers
 
-    fn pad_left(styled_text: &str, visible_len: usize, target_width: usize) -> String {
-        let padding = target_width.saturating_sub(visible_len);
-        format!("{}{}", styled_text, " ".repeat(padding))
+    fn visible_width(s: &str) -> usize {
+        let mut in_escape = false;
+        let mut len = 0;
+        for c in s.chars() {
+            if c == '\x1b' {
+                in_escape = true;
+            } else if in_escape {
+                if c == 'm' {
+                    in_escape = false;
+                }
+            } else {
+                len += 1;
+            }
+        }
+        len
     }
 
-    fn pad_right(styled_text: &str, visible_len: usize, target_width: usize) -> String {
-        let padding = target_width.saturating_sub(visible_len);
-        format!("{}{}", " ".repeat(padding), styled_text)
+    fn pad_left(styled_text: &str, target_width: usize) -> String {
+        let vlen = Self::visible_width(styled_text);
+        let padding = target_width.saturating_sub(vlen);
+        let mut s = String::with_capacity(styled_text.len() + padding);
+        s.push_str(styled_text);
+        for _ in 0..padding {
+            s.push(' ');
+        }
+        s
+    }
+
+    fn pad_right(styled_text: &str, target_width: usize) -> String {
+        let vlen = Self::visible_width(styled_text);
+        let padding = target_width.saturating_sub(vlen);
+        let mut s = String::with_capacity(styled_text.len() + padding);
+        for _ in 0..padding {
+            s.push(' ');
+        }
+        s.push_str(styled_text);
+        s
     }
 
     // Header Banner
 
     pub fn format_banner(&self, out: &mut String) {
-        let _ = writeln!(out, "{}", self.styler.cyan("+---------------------------------------------------------------+"));
-        let _ = writeln!(out, "{}", self.styler.cyan("|              LOGMORPH - MINECRAFT LOG ANALYZER                |"));
-        let _ = writeln!(out, "{}", self.styler.cyan("|           Streaming Parser & StackTrace Deduplicator          |"));
-        let _ = writeln!(out, "{}", self.styler.cyan("+---------------------------------------------------------------+"));
+        let _ = writeln!(out, "{}", self.styler.cyan("╔═══════════════════════════════════════════════════════════════╗"));
+        let _ = writeln!(out, "{}", self.styler.cyan("║               LOGMORPH - MINECRAFT LOG ANALYZER               ║"));
+        let _ = writeln!(out, "{}", self.styler.cyan("║           Streaming Parser & StackTrace Deduplicator          ║"));
+        let _ = writeln!(out, "{}", self.styler.cyan("╚═══════════════════════════════════════════════════════════════╝"));
         let _ = writeln!(out);
     }
 
@@ -118,69 +147,89 @@ impl TerminalRenderer {
 
     pub fn format_summary(&self, out: &mut String, stats: &AggregationStats, plugin_summary: &[(&String, &usize)]) {
         let _ = writeln!(out, "{}", self.styler.bold("=== Execution Summary ==="));
-        let _ = writeln!(out, "+-----------------------------+---------------------------+");
-        let _ = writeln!(out, "| {:<27} | {:>25} |", "Total Lines Processed", stats.total_lines);
-        let _ = writeln!(out, "| {:<27} | {:>25} |", "Total Log Entries", stats.total_log_messages);
+        let _ = writeln!(out, "┌─────────────────────────────┬───────────────────────────┐");
         let _ = writeln!(
             out,
-            "| {} | {:>25} |",
-            Self::pad_left(&self.styler.green("INFO Messages"), 13, 27),
-            stats.info_count
+            "│ {} │ {} │",
+            Self::pad_left("Total Lines Processed", 27),
+            Self::pad_right(&stats.total_lines.to_string(), 25)
         );
         let _ = writeln!(
             out,
-            "| {} | {:>25} |",
-            Self::pad_left(&self.styler.yellow("WARN Messages"), 13, 27),
-            stats.warn_count
+            "│ {} │ {} │",
+            Self::pad_left("Total Log Entries", 27),
+            Self::pad_right(&stats.total_log_messages.to_string(), 25)
         );
         let _ = writeln!(
             out,
-            "| {} | {:>25} |",
-            Self::pad_left(&self.styler.red("ERROR Messages"), 14, 27),
-            stats.error_count
+            "│ {} │ {} │",
+            Self::pad_left(&self.styler.green("INFO Messages"), 27),
+            Self::pad_right(&stats.info_count.to_string(), 25)
         );
         let _ = writeln!(
             out,
-            "| {} | {:>25} |",
-            Self::pad_left(&self.styler.cyan("DEBUG Messages"), 14, 27),
-            stats.debug_count
-        );
-        let _ = writeln!(out, "+-----------------------------+---------------------------+");
-        let _ = writeln!(
-            out,
-            "| {} | {:>25} |",
-            Self::pad_left(&self.styler.magenta("Total Exceptions Emitted"), 24, 27),
-            stats.total_exceptions
+            "│ {} │ {} │",
+            Self::pad_left(&self.styler.yellow("WARN Messages"), 27),
+            Self::pad_right(&stats.warn_count.to_string(), 25)
         );
         let _ = writeln!(
             out,
-            "| {} | {:>25} |",
-            Self::pad_left(&self.styler.bold("Unique Error Signatures"), 23, 27),
-            stats.unique_signatures
+            "│ {} │ {} │",
+            Self::pad_left(&self.styler.red("ERROR Messages"), 27),
+            Self::pad_right(&stats.error_count.to_string(), 25)
+        );
+        let _ = writeln!(
+            out,
+            "│ {} │ {} │",
+            Self::pad_left(&self.styler.cyan("DEBUG Messages"), 27),
+            Self::pad_right(&stats.debug_count.to_string(), 25)
+        );
+        let _ = writeln!(out, "├─────────────────────────────┼───────────────────────────┤");
+        let _ = writeln!(
+            out,
+            "│ {} │ {} │",
+            Self::pad_left(&self.styler.magenta("Total Exceptions Emitted"), 27),
+            Self::pad_right(&stats.total_exceptions.to_string(), 25)
+        );
+        let _ = writeln!(
+            out,
+            "│ {} │ {} │",
+            Self::pad_left(&self.styler.bold("Unique Error Signatures"), 27),
+            Self::pad_right(&stats.unique_signatures.to_string(), 25)
         );
         if stats.dropped_signatures > 0 {
             let _ = writeln!(
                 out,
-                "| {} | {:>25} |",
-                Self::pad_left(&self.styler.red("Dropped Signatures (Cap)"), 24, 27),
-                stats.dropped_signatures
+                "│ {} │ {} │",
+                Self::pad_left(&self.styler.red("Dropped Signatures (Cap)"), 27),
+                Self::pad_right(&stats.dropped_signatures.to_string(), 25)
             );
         }
-        let _ = writeln!(out, "+-----------------------------+---------------------------+");
+        let _ = writeln!(out, "└─────────────────────────────┴───────────────────────────┘");
         let _ = writeln!(out);
 
         if !plugin_summary.is_empty() {
             let _ = writeln!(out, "{}", self.styler.bold("=== Top Offending Plugins ==="));
-            let _ = writeln!(out, "+--------------------------------+------------------------+");
-            let _ = writeln!(out, "| {:<30} | {:>22} |", "Plugin Name", "Error Count");
-            let _ = writeln!(out, "+--------------------------------+------------------------+");
+            let _ = writeln!(out, "┌────────────────────────────────┬────────────────────────┐");
+            let _ = writeln!(
+                out,
+                "│ {} │ {} │",
+                Self::pad_left("Plugin Name", 30),
+                Self::pad_right("Error Count", 22)
+            );
+            let _ = writeln!(out, "├────────────────────────────────┼────────────────────────┤");
             for (plugin, count) in plugin_summary {
+                let display_plugin = if plugin.chars().count() > 30 {
+                    format!("{}...", &plugin.chars().take(27).collect::<String>())
+                } else {
+                    (*plugin).clone()
+                };
                 let count_str = count.to_string();
-                let col1 = Self::pad_left(&self.styler.yellow(plugin), plugin.len(), 30);
-                let col2 = Self::pad_right(&self.styler.red(&count_str), count_str.len(), 22);
-                let _ = writeln!(out, "| {} | {} |", col1, col2);
+                let col1 = Self::pad_left(&self.styler.yellow(&display_plugin), 30);
+                let col2 = Self::pad_right(&self.styler.red(&count_str), 22);
+                let _ = writeln!(out, "│ {} │ {} │", col1, col2);
             }
-            let _ = writeln!(out, "+--------------------------------+------------------------+");
+            let _ = writeln!(out, "└────────────────────────────────┴────────────────────────┘");
             let _ = writeln!(out);
         }
     }
@@ -541,3 +590,70 @@ impl TerminalRenderer {
         print!("{}", output);
     }
 }
+
+// Unit Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_visible_width_calculation() {
+        let plain = "INFO Messages";
+        assert_eq!(TerminalRenderer::visible_width(plain), 13);
+
+        let colored = "\x1b[32mINFO Messages\x1b[0m";
+        assert_eq!(TerminalRenderer::visible_width(colored), 13);
+
+        let bold_colored = "\x1b[1m\x1b[31mERROR Messages\x1b[0m";
+        assert_eq!(TerminalRenderer::visible_width(bold_colored), 14);
+    }
+
+    #[test]
+    fn test_banner_line_lengths() {
+        let renderer = TerminalRenderer::new(false);
+        let mut banner = String::new();
+        renderer.format_banner(&mut banner);
+
+        let lines: Vec<&str> = banner.lines().filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines.len(), 4);
+        for line in lines {
+            assert_eq!(TerminalRenderer::visible_width(line), 65);
+        }
+    }
+
+    #[test]
+    fn test_summary_table_alignment() {
+        let renderer = TerminalRenderer::new(false);
+        let stats = AggregationStats {
+            total_lines: 1724,
+            total_log_messages: 1473,
+            info_count: 1273,
+            warn_count: 186,
+            error_count: 14,
+            debug_count: 0,
+            total_exceptions: 6,
+            unique_signatures: 4,
+            dropped_signatures: 0,
+        };
+        let p1 = "PlaceholderAPI".to_string();
+        let p2 = "EvenMoreFish".to_string();
+        let c1 = 2usize;
+        let c2 = 1usize;
+        let plugins = vec![(&p1, &c1), (&p2, &c2)];
+
+        let mut out = String::new();
+        renderer.format_summary(&mut out, &stats, &plugins);
+
+        let lines: Vec<&str> = out.lines().collect();
+        // Check Execution Summary box
+        for line in &lines[1..12] {
+            assert_eq!(TerminalRenderer::visible_width(line), 59);
+        }
+        // Check Top Offending Plugins box
+        for line in &lines[14..19] {
+            assert_eq!(TerminalRenderer::visible_width(line), 59);
+        }
+    }
+}
+
