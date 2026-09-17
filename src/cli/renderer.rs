@@ -233,10 +233,14 @@ impl TerminalRenderer {
             );
         }
 
+        let mut known = std::collections::HashSet::new();
+        if let Some(ref plugin) = err.plugin_name {
+            known.insert(plugin.clone());
+        }
+
         let mut key_lines = Vec::new();
-        let mut plugin_frames_printed = 0;
         for frame in &err.sample_trace.frames {
-            let is_plugin = FrameFilter::is_plugin_frame(frame);
+            let is_plugin = FrameFilter::is_plugin_frame(frame, &known);
             let loc = match (&frame.file_name, frame.line_number) {
                 (Some(f), Some(l)) => format!("{}:{}", f, l),
                 (Some(f), None) => f.clone(),
@@ -244,7 +248,6 @@ impl TerminalRenderer {
             };
 
             if is_plugin {
-                plugin_frames_printed += 1;
                 key_lines.push(format!(
                     "    {} {}.{}({})",
                     self.styler.green("▶"),
@@ -252,29 +255,18 @@ impl TerminalRenderer {
                     frame.method_name,
                     loc
                 ));
-            } else if plugin_frames_printed < 2 {
-                key_lines.push(format!(
-                    "      {} {}.{}({})",
-                    self.styler.dim("·"),
-                    self.styler.dim(&frame.class_name),
-                    self.styler.dim(&frame.method_name),
-                    self.styler.dim(&loc)
-                ));
             }
         }
 
         if let Some(ref caused) = err.sample_trace.caused_by {
-            key_lines.push(format!("    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception)));
-            if let Some(ref cmsg) = caused.exception_message {
-                key_lines.push(format!("      {}", cmsg));
-            }
+            let mut caused_lines = Vec::new();
             for frame in &caused.frames {
-                if FrameFilter::is_plugin_frame(frame) {
+                if FrameFilter::is_plugin_frame(frame, &known) {
                     let loc = match (&frame.file_name, frame.line_number) {
                         (Some(f), Some(l)) => format!("{}:{}", f, l),
                         _ => "Unknown".to_string(),
                     };
-                    key_lines.push(format!(
+                    caused_lines.push(format!(
                         "      {} {}.{}({})",
                         self.styler.green("▶"),
                         self.styler.cyan(&frame.class_name),
@@ -282,6 +274,13 @@ impl TerminalRenderer {
                         loc
                     ));
                 }
+            }
+            if !caused_lines.is_empty() {
+                key_lines.push(format!("    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception)));
+                if let Some(ref cmsg) = caused.exception_message {
+                    key_lines.push(format!("      {}", cmsg));
+                }
+                key_lines.extend(caused_lines);
             }
         }
 
@@ -342,6 +341,11 @@ impl TerminalRenderer {
             );
         }
 
+        let mut known = std::collections::HashSet::new();
+        if let Some(ref plugin) = err.plugin_name {
+            known.insert(plugin.clone());
+        }
+
         let has_frames = !err.sample_trace.frames.is_empty();
         let has_caused_by = err.sample_trace.caused_by.is_some();
 
@@ -349,30 +353,43 @@ impl TerminalRenderer {
         if has_frames || has_caused_by {
             let _ = writeln!(out, "Full Stack Trace:");
             for frame in &err.sample_trace.frames {
-                let is_plugin = FrameFilter::is_plugin_frame(frame);
+                let kind = FrameFilter::classify_frame(frame, &known);
                 let loc = match (&frame.file_name, frame.line_number) {
                     (Some(f), Some(l)) => format!("{}:{}", f, l),
                     _ => if frame.is_native { "Native Method".to_string() } else { "Unknown".to_string() },
                 };
 
-                if is_plugin {
-                    let _ = writeln!(
-                        out,
-                        "  {} {}.{}({})",
-                        self.styler.green("▶ [Plugin]"),
-                        self.styler.cyan(&frame.class_name),
-                        frame.method_name,
-                        loc
-                    );
-                } else {
-                    let _ = writeln!(
-                        out,
-                        "    {} {}.{}({})",
-                        self.styler.dim("[Framework]"),
-                        self.styler.dim(&frame.class_name),
-                        self.styler.dim(&frame.method_name),
-                        self.styler.dim(&loc)
-                    );
+                match kind {
+                    crate::engine::frame_filter::FrameKind::Plugin => {
+                        let _ = writeln!(
+                            out,
+                            "  {} {}.{}({})",
+                            self.styler.green("▶ [Plugin]"),
+                            self.styler.cyan(&frame.class_name),
+                            frame.method_name,
+                            loc
+                        );
+                    }
+                    crate::engine::frame_filter::FrameKind::Framework => {
+                        let _ = writeln!(
+                            out,
+                            "    {} {}.{}({})",
+                            self.styler.dim("[Framework]"),
+                            self.styler.dim(&frame.class_name),
+                            self.styler.dim(&frame.method_name),
+                            self.styler.dim(&loc)
+                        );
+                    }
+                    crate::engine::frame_filter::FrameKind::Unknown => {
+                        let _ = writeln!(
+                            out,
+                            "    {} {}.{}({})",
+                            self.styler.yellow("[Unknown]"),
+                            self.styler.yellow(&frame.class_name),
+                            frame.method_name,
+                            loc
+                        );
+                    }
                 }
             }
 
@@ -383,29 +400,42 @@ impl TerminalRenderer {
                     let _ = writeln!(out, "  Message: {}", cmsg);
                 }
                 for frame in &caused.frames {
-                    let is_plugin = FrameFilter::is_plugin_frame(frame);
+                    let kind = FrameFilter::classify_frame(frame, &known);
                     let loc = match (&frame.file_name, frame.line_number) {
                         (Some(f), Some(l)) => format!("{}:{}", f, l),
                         _ => "Unknown".to_string(),
                     };
-                    if is_plugin {
-                        let _ = writeln!(
-                            out,
-                            "  {} {}.{}({})",
-                            self.styler.green("▶ [Plugin]"),
-                            self.styler.cyan(&frame.class_name),
-                            frame.method_name,
-                            loc
-                        );
-                    } else {
-                        let _ = writeln!(
-                            out,
-                            "    {} {}.{}({})",
-                            self.styler.dim("[Framework]"),
-                            self.styler.dim(&frame.class_name),
-                            self.styler.dim(&frame.method_name),
-                            self.styler.dim(&loc)
-                        );
+                    match kind {
+                        crate::engine::frame_filter::FrameKind::Plugin => {
+                            let _ = writeln!(
+                                out,
+                                "  {} {}.{}({})",
+                                self.styler.green("▶ [Plugin]"),
+                                self.styler.cyan(&frame.class_name),
+                                frame.method_name,
+                                loc
+                            );
+                        }
+                        crate::engine::frame_filter::FrameKind::Framework => {
+                            let _ = writeln!(
+                                out,
+                                "    {} {}.{}({})",
+                                self.styler.dim("[Framework]"),
+                                self.styler.dim(&frame.class_name),
+                                self.styler.dim(&frame.method_name),
+                                self.styler.dim(&loc)
+                            );
+                        }
+                        crate::engine::frame_filter::FrameKind::Unknown => {
+                            let _ = writeln!(
+                                out,
+                                "    {} {}.{}({})",
+                                self.styler.yellow("[Unknown]"),
+                                self.styler.yellow(&frame.class_name),
+                                frame.method_name,
+                                loc
+                            );
+                        }
                     }
                 }
             }
@@ -431,6 +461,27 @@ impl TerminalRenderer {
             self.format_errors(&mut out, &engine.aggregated_errors(), plugin_filter);
         }
         out
+    }
+
+    // Log Line Formatter
+
+    pub fn format_log_line(&self, out: &mut String, line: &crate::models::log_line::LogLine) {
+        if let Some(ref ts) = line.timestamp {
+            let _ = write!(out, "[{}] ", self.styler.dim(ts));
+        }
+        let level_str = match line.level {
+            crate::models::log_line::LogLevel::Info => self.styler.green(line.level.as_str()),
+            crate::models::log_line::LogLevel::Warn => self.styler.yellow(line.level.as_str()),
+            crate::models::log_line::LogLevel::Error => self.styler.red(line.level.as_str()),
+            crate::models::log_line::LogLevel::Debug => self.styler.cyan(line.level.as_str()),
+            crate::models::log_line::LogLevel::Trace => self.styler.dim(line.level.as_str()),
+            crate::models::log_line::LogLevel::Unknown => self.styler.dim(line.level.as_str()),
+        };
+        let _ = write!(out, "[{}] ", level_str);
+        if let Some(ref src) = line.source {
+            let _ = write!(out, "[{}] ", self.styler.yellow(src));
+        }
+        let _ = writeln!(out, "{}", line.message);
     }
 
     // Render All Output

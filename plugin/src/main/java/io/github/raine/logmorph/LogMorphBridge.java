@@ -54,13 +54,22 @@ public class LogMorphBridge {
             File extractedLib = new File(nativesDir, libName);
 
             try (InputStream in = LogMorphBridge.class.getResourceAsStream(resourcePath)) {
-                if (in != null) {
-                    try (OutputStream out = new FileOutputStream(extractedLib)) {
-                        byte[] buf = new byte[8192];
-                        int len;
-                        while ((len = in.read(buf)) > 0) {
-                            out.write(buf, 0, len);
-                        }
+                if (in == null) {
+                    System.err.println("[LogMorph] Native library not bundled for " + os + " (" + arch + "): " + resourcePath);
+                    try {
+                        System.loadLibrary("logmorph");
+                        loaded = true;
+                        return true;
+                    } catch (Throwable t) {
+                        return false;
+                    }
+                }
+
+                try (OutputStream out = new FileOutputStream(extractedLib)) {
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = in.read(buf)) > 0) {
+                        out.write(buf, 0, len);
                     }
                 }
             }
@@ -70,12 +79,15 @@ public class LogMorphBridge {
                 loaded = true;
                 return true;
             } else {
-                System.loadLibrary("logmorph");
-                loaded = true;
-                return true;
+                try {
+                    System.loadLibrary("logmorph");
+                    loaded = true;
+                    return true;
+                } catch (Throwable t) {
+                    return false;
+                }
             }
         } catch (Throwable t) {
-            t.printStackTrace();
             return false;
         }
     }

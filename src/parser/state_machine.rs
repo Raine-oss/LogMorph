@@ -24,6 +24,7 @@ struct TraceBuilder {
     message: Option<String>,
     frames: Vec<StackFrame>,
     caused_by: Option<Box<TraceBuilder>>,
+    more_count: usize,
     lines_consumed: usize,
 }
 
@@ -34,6 +35,7 @@ impl TraceBuilder {
             message,
             frames: Vec::new(),
             caused_by: None,
+            more_count: 0,
             lines_consumed: initial_lines,
         }
     }
@@ -56,17 +58,46 @@ impl TraceBuilder {
         }
     }
 
-    fn record_more(&mut self) {
+    fn record_more(&mut self, count: usize) {
         self.lines_consumed += 1;
+        if let Some(ref mut child) = self.caused_by {
+            child.record_more(count);
+        } else {
+            self.more_count = count;
+        }
     }
 
-    fn build(self) -> (StackTraceBlock, usize) {
+    fn build(mut self, parent_frames: Option<&[StackFrame]>) -> (StackTraceBlock, usize) {
         let lines = self.lines_consumed;
+
+        if let Some(parents) = parent_frames {
+            if self.more_count > 0 && !parents.is_empty() {
+                let p_len = parents.len();
+                let start_idx = p_len.saturating_sub(self.more_count);
+                let candidate_slice = &parents[start_idx..p_len];
+
+                for candidate in candidate_slice {
+                    let already_present = self.frames.iter().any(|existing| {
+                        existing.class_name == candidate.class_name
+                            && existing.method_name == candidate.method_name
+                            && existing.line_number == candidate.line_number
+                    });
+
+                    if !already_present {
+                        self.frames.push(candidate.clone());
+                    }
+                }
+            }
+        }
+
+        let current_frames = self.frames.clone();
+        let built_cause = self.caused_by.map(|c| Box::new(c.build(Some(&current_frames)).0));
+
         let block = StackTraceBlock {
             primary_exception: self.exception,
             exception_message: self.message,
             frames: self.frames,
-            caused_by: self.caused_by.map(|c| Box::new(c.build().0)),
+            caused_by: built_cause,
         };
         (block, lines)
     }
@@ -157,8 +188,8 @@ impl StateMachineParser {
                     builder.add_caused_by(exception, message);
                     self.state = State::AccumulatingStackTrace { log, builder };
                 }
-                ParsedLine::MoreFrames(_) => {
-                    builder.record_more();
+                ParsedLine::MoreFrames(count) => {
+                    builder.record_more(count);
                     self.state = State::AccumulatingStackTrace { log, builder };
                 }
                 ParsedLine::ExceptionHeader { exception, message } => {
@@ -166,7 +197,7 @@ impl StateMachineParser {
                     self.state = State::AccumulatingStackTrace { log, builder };
                 }
                 ParsedLine::Log(new_log) => {
-                    let (trace, lines) = builder.build();
+                    let (trace, lines) = builder.build(None);
                     events.push(ParsedEvent::ErrorWithTrace {
                         log,
                         trace,
@@ -175,7 +206,7 @@ impl StateMachineParser {
                     self.state = State::PendingLog(new_log);
                 }
                 ParsedLine::Text(text) => {
-                    let (trace, lines) = builder.build();
+                    let (trace, lines) = builder.build(None);
                     events.push(ParsedEvent::ErrorWithTrace {
                         log,
                         trace,
@@ -197,7 +228,7 @@ impl StateMachineParser {
                 events.push(ParsedEvent::Line(log));
             }
             State::AccumulatingStackTrace { log, builder } => {
-                let (trace, lines) = builder.build();
+                let (trace, lines) = builder.build(None);
                 events.push(ParsedEvent::ErrorWithTrace {
                     log,
                     trace,
@@ -219,17 +250,17 @@ mod tests {
     fn test_state_machine_simple_log_flow() {
         let mut sm = StateMachineParser::new();
         let evs1 = sm.process_line("[10:00:00 INFO]: First line");
-        assert!(evs1.is_empty()); // PendingLog
+        assert!(evs1.is_empty());
 
         let evs2 = sm.process_line("[10:00:01 INFO]: Second line");
-        assert_eq!(evs2.len(), 1); // First line emitted
+        assert_eq!(evs2.len(), 1);
         match &evs2[0] {
             ParsedEvent::Line(l) => assert_eq!(l.message, "First line"),
             _ => panic!("Expected Line"),
         }
 
         let evs3 = sm.finish();
-        assert_eq!(evs3.len(), 1); // Second line emitted on finish
+        assert_eq!(evs3.len(), 1);
         match &evs3[0] {
             ParsedEvent::Line(l) => assert_eq!(l.message, "Second line"),
             _ => panic!("Expected Line"),
@@ -247,6 +278,33 @@ mod tests {
         sm.process_line("[10:00:01 INFO]: Server started");
 
         let finished = sm.finish();
-        assert_eq!(finished.len(), 1); // Final info log
+        assert_eq!(finished.len(), 1);
+    }
+
+    #[test]
+    fn test_reconstruct_more_frames_deduplication() {
+        let mut sm = StateMachineParser::new();
+        sm.process_line("[10:00:00 ERROR]: Failed");
+        sm.process_line("java.lang.RuntimeException: Root error");
+        sm.process_line("\tat com.example.Top.call(Top.java:10)");
+        sm.process_line("\tat com.example.Middle.call(Middle.java:20)");
+        sm.process_line("\tat com.example.Bottom.run(Bottom.java:30)");
+        sm.process_line("Caused by: java.io.IOException: Sub error");
+        sm.process_line("\tat com.example.Sub.action(Sub.java:5)");
+        sm.process_line("\tat com.example.Middle.call(Middle.java:20)");
+        sm.process_line("\t... 2 more");
+
+        let evs = sm.finish();
+        assert_eq!(evs.len(), 1);
+        match &evs[0] {
+            ParsedEvent::ErrorWithTrace { trace, .. } => {
+                let cause = trace.caused_by.as_ref().expect("Expected cause");
+                assert_eq!(cause.frames.len(), 3);
+                assert_eq!(cause.frames[0].class_name, "com.example.Sub");
+                assert_eq!(cause.frames[1].class_name, "com.example.Middle");
+                assert_eq!(cause.frames[2].class_name, "com.example.Bottom");
+            }
+            _ => panic!("Expected ErrorWithTrace"),
+        }
     }
 }

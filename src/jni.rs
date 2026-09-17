@@ -95,31 +95,31 @@ pub extern "system" fn Java_io_github_raine_logmorph_LogMorphBridge_exportJson<'
     let result = catch_unwind(AssertUnwindSafe(|| {
         let path_str: String = match env.get_string(&log_path) {
             Ok(js) => js.into(),
-            Err(e) => return format!("{{\"error\": \"Failed to read log path: {}\"}}", e),
+            Err(e) => return serde_json::json!({ "error": format!("Failed to read log path: {}", e) }).to_string(),
         };
 
         let path = Path::new(&path_str);
         if !path.exists() {
-            return format!("{{\"error\": \"Log file not found at: {}\"}}", path.display());
+            return serde_json::json!({ "error": format!("Log file not found at: {}", path.display()) }).to_string();
         }
 
         let reader = match LogStreamReader::from_path(path) {
             Ok(r) => r,
-            Err(e) => return format!("{{\"error\": \"Failed to open log file {}: {}\"}}", path.display(), e),
+            Err(e) => return serde_json::json!({ "error": format!("Failed to open log file {}: {}", path.display(), e) }).to_string(),
         };
 
         let mut engine = AggregationEngine::new();
         for event_res in reader {
             match event_res {
                 Ok(event) => engine.feed_event(event),
-                Err(e) => return format!("{{\"error\": \"Stream reading error: {}\"}}", e),
+                Err(e) => return serde_json::json!({ "error": format!("Stream reading error: {}", e) }).to_string(),
             }
         }
 
         let report = engine.to_report();
         match serde_json::to_string_pretty(&report) {
             Ok(json) => json,
-            Err(e) => format!("{{\"error\": \"Serialization error: {}\"}}", e),
+            Err(e) => serde_json::json!({ "error": format!("Serialization error: {}", e) }).to_string(),
         }
     }));
 

@@ -117,10 +117,10 @@ mvn test -q
 record_test "Maven JUnit: JNI Bridge Native Roundtrip" $?
 
 mvn package -DskipTests -q
-record_test "Maven Package: LogMorph-0.1.0.jar built with embedded native engine" $?
+record_test "Maven Package: LogMorph-1.0.0.jar built with embedded native engine" $?
 cd ..
 
-[ -f plugin/target/LogMorph-0.1.0.jar ]
+[ -f plugin/target/LogMorph-1.0.0.jar ]
 record_test "Plugin JAR Artifact verified on disk" $?
 
 echo

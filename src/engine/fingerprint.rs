@@ -5,6 +5,7 @@ use crate::models::stack_trace::{StackFrame, StackTraceBlock};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::sync::OnceLock;
 
@@ -126,8 +127,9 @@ impl FingerprintGenerator {
         plugin_name: Option<&str>,
         raw_message: Option<&str>,
         trace: &StackTraceBlock,
+        known_plugins: &HashSet<String>,
     ) -> (ErrorSignatureKey, Option<StackFrame>) {
-        let top_frame = FrameFilter::find_top_plugin_frame(trace);
+        let top_frame = FrameFilter::find_top_plugin_frame(trace, known_plugins);
         let cleaned_message = raw_message.map(normalize_dynamic_noise);
         let hash = Self::generate_signature(
             primary_exception,
@@ -234,14 +236,25 @@ mod tests {
 
     #[test]
     fn test_collision_resistant_keys() {
+        let collision_hash = 0xDEAD_BEEF_CAFE_BABE_u64;
         let key1 = ErrorSignatureKey {
-            hash: 42,
-            structural_identity: "ErrorA".to_string(),
+            hash: collision_hash,
+            structural_identity: "java.lang.NullPointerException:PluginA:com.example.A.onMove".to_string(),
         };
         let key2 = ErrorSignatureKey {
-            hash: 42,
-            structural_identity: "ErrorB".to_string(),
+            hash: collision_hash,
+            structural_identity: "java.lang.NullPointerException:PluginB:com.other.B.onInteract".to_string(),
         };
+
+        assert_eq!(key1.hash, key2.hash);
         assert_ne!(key1, key2);
+
+        let mut map = std::collections::HashMap::new();
+        map.insert(key1.clone(), "ErrorA_Data".to_string());
+        map.insert(key2.clone(), "ErrorB_Data".to_string());
+
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get(&key1), Some(&"ErrorA_Data".to_string()));
+        assert_eq!(map.get(&key2), Some(&"ErrorB_Data".to_string()));
     }
 }

@@ -8,7 +8,7 @@ use crate::models::log_line::{LogLevel, LogLine};
 use crate::models::stack_trace::StackTraceBlock;
 use crate::parser::state_machine::ParsedEvent;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // Aggregation Stats
 
@@ -49,6 +49,7 @@ pub struct AggregationEngine {
     plugin_error_counts: HashMap<String, usize>,
     stats: AggregationStats,
     max_signatures: Option<usize>,
+    known_plugins: HashSet<String>,
 }
 
 impl AggregationEngine {
@@ -58,6 +59,7 @@ impl AggregationEngine {
             plugin_error_counts: HashMap::new(),
             stats: AggregationStats::default(),
             max_signatures: None,
+            known_plugins: HashSet::new(),
         }
     }
 
@@ -67,6 +69,14 @@ impl AggregationEngine {
             plugin_error_counts: HashMap::new(),
             stats: AggregationStats::default(),
             max_signatures,
+            known_plugins: HashSet::new(),
+        }
+    }
+
+    pub fn register_plugin(&mut self, name: &str) {
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            self.known_plugins.insert(trimmed.to_string());
         }
     }
 
@@ -75,6 +85,12 @@ impl AggregationEngine {
             ParsedEvent::Line(log) => {
                 self.stats.total_lines += 1;
                 self.record_log_line(&log);
+                if let Some(ref src) = log.source {
+                    self.register_plugin(src);
+                }
+                if let Some(extracted) = MinecraftRules::extract_from_message(&log.message) {
+                    self.register_plugin(&extracted.plugin_name);
+                }
             }
             ParsedEvent::ErrorWithTrace {
                 log,
@@ -84,6 +100,12 @@ impl AggregationEngine {
                 self.stats.total_lines += line_count;
                 if let Some(ref l) = log {
                     self.record_log_line(l);
+                    if let Some(ref src) = l.source {
+                        self.register_plugin(src);
+                    }
+                    if let Some(extracted) = MinecraftRules::extract_from_message(&l.message) {
+                        self.register_plugin(&extracted.plugin_name);
+                    }
                 }
                 self.record_error(log, trace);
             }
@@ -120,12 +142,40 @@ impl AggregationEngine {
             }
 
             if let Some(extracted) = MinecraftRules::extract_from_message(&l.message) {
+                self.register_plugin(&extracted.plugin_name);
                 plugin_name = Some(extracted.plugin_name);
                 event_name = extracted.event_name;
                 attribution = AttributionKind::Confirmed;
             } else if let Some(ref src) = l.source {
+                self.register_plugin(src);
                 plugin_name = Some(src.clone());
                 attribution = AttributionKind::Confirmed;
+            }
+        }
+
+        if plugin_name.is_none() {
+            let namespaces = FrameFilter::collect_plugin_namespaces(&trace, &self.known_plugins);
+            if namespaces.len() > 1 {
+                attribution = AttributionKind::Ambiguous;
+                plugin_name = None;
+            } else if namespaces.len() == 1 {
+                attribution = AttributionKind::DetectedFromStackFrame;
+                let top_plugin_frame = FrameFilter::find_top_plugin_frame(&trace, &self.known_plugins);
+                if let Some(ref frame) = top_plugin_frame {
+                    if let Some(matched) = self.known_plugins.iter().find(|p| frame.class_name.to_lowercase().contains(&p.to_lowercase())) {
+                        plugin_name = Some(matched.clone());
+                    } else {
+                        let parts: Vec<&str> = frame.class_name.split('.').collect();
+                        if parts.len() >= 3 {
+                            plugin_name = Some(parts[2].to_string());
+                        } else if parts.len() >= 2 {
+                            plugin_name = Some(parts[1].to_string());
+                        }
+                    }
+                }
+            } else {
+                attribution = AttributionKind::Unknown;
+                plugin_name = None;
             }
         }
 
@@ -134,34 +184,13 @@ impl AggregationEngine {
             plugin_name.as_deref(),
             raw_message.as_deref(),
             &trace,
+            &self.known_plugins,
         );
 
-        if plugin_name.is_none() {
-            let namespaces = FrameFilter::collect_plugin_namespaces(&trace);
-            if namespaces.len() > 1 {
-                attribution = AttributionKind::Ambiguous;
-                if let Some(ref frame) = top_frame {
-                    let parts: Vec<&str> = frame.class_name.split('.').collect();
-                    if parts.len() >= 3 {
-                        plugin_name = Some(parts[2].to_string());
-                    }
-                }
-            } else if namespaces.len() == 1 {
-                attribution = AttributionKind::DetectedFromStackFrame;
-                if let Some(ref frame) = top_frame {
-                    let parts: Vec<&str> = frame.class_name.split('.').collect();
-                    if parts.len() >= 3 {
-                        plugin_name = Some(parts[2].to_string());
-                    }
-                }
-            }
-        }
-
-        if let Some(ref p) = plugin_name {
-            *self.plugin_error_counts.entry(p.clone()).or_insert(0) += 1;
-        }
-
         if let Some(existing) = self.errors_by_key.get_mut(&key) {
+            if let Some(ref p) = plugin_name {
+                *self.plugin_error_counts.entry(p.clone()).or_insert(0) += 1;
+            }
             existing.record_occurrence(timestamp);
         } else {
             if let Some(limit) = self.max_signatures {
@@ -169,6 +198,10 @@ impl AggregationEngine {
                     self.stats.dropped_signatures += 1;
                     return;
                 }
+            }
+
+            if let Some(ref p) = plugin_name {
+                *self.plugin_error_counts.entry(p.clone()).or_insert(0) += 1;
             }
 
             let error = AggregatedError::new(
@@ -252,5 +285,57 @@ mod tests {
         assert_eq!(engine.stats().unique_signatures, 2);
         assert_eq!(engine.stats().dropped_signatures, 3);
         assert_eq!(engine.stats().total_exceptions, 5);
+    }
+
+    #[test]
+    fn test_dropped_signatures_do_not_pollute_plugin_counts() {
+        let mut engine = AggregationEngine::with_max_signatures(Some(1));
+        engine.register_plugin("PluginA");
+        engine.register_plugin("PluginB");
+
+        let trace1 = StackTraceBlock::new(
+            "com.plugina.ExceptionA".to_string(),
+            Some("First error".to_string()),
+            vec![],
+            None,
+        );
+        let log1 = LogLine {
+            timestamp: None,
+            thread_name: None,
+            level: LogLevel::Error,
+            source: Some("PluginA".to_string()),
+            message: "First error".to_string(),
+        };
+        engine.feed_event(ParsedEvent::ErrorWithTrace {
+            log: Some(log1),
+            trace: trace1,
+            line_count: 2,
+        });
+
+        let trace2 = StackTraceBlock::new(
+            "com.pluginb.ExceptionB".to_string(),
+            Some("Second error".to_string()),
+            vec![],
+            None,
+        );
+        let log2 = LogLine {
+            timestamp: None,
+            thread_name: None,
+            level: LogLevel::Error,
+            source: Some("PluginB".to_string()),
+            message: "Second error".to_string(),
+        };
+        engine.feed_event(ParsedEvent::ErrorWithTrace {
+            log: Some(log2),
+            trace: trace2,
+            line_count: 2,
+        });
+
+        assert_eq!(engine.stats().unique_signatures, 1);
+        assert_eq!(engine.stats().dropped_signatures, 1);
+        let summary = engine.plugin_summary();
+        assert_eq!(summary.len(), 1);
+        assert_eq!(summary[0].0, "PluginA");
+        assert_eq!(*summary[0].1, 1);
     }
 }

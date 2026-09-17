@@ -326,38 +326,79 @@ fn run_watch(
                 let trimmed = line_buf.trim_end_matches(&['\r', '\n'][..]);
                 let events = parser.process_line(trimmed);
                 for event in events {
-                    let should_display = match &event {
-                        ParsedEvent::Line(l) => {
-                            if let Some(ref t) = target_level {
-                                &l.level == t
-                            } else {
-                                true
+                    match event {
+                        ParsedEvent::Line(line) => {
+                            engine.feed_event(ParsedEvent::Line(line.clone()));
+                            let level_matches = target_level.as_ref().map(|t| &line.level == t).unwrap_or(true);
+                            let plugin_matches = plugin.map(|p| line.source.as_deref().map(|s| s.eq_ignore_ascii_case(p)).unwrap_or(false)).unwrap_or(true);
+                            if level_matches && plugin_matches {
+                                let mut buf = String::new();
+                                renderer.format_log_line(&mut buf, &line);
+                                print!("{}", buf);
                             }
                         }
-                        ParsedEvent::ErrorWithTrace { log, .. } => {
-                            if let Some(ref t) = target_level {
-                                log.as_ref().map(|l| &l.level == t).unwrap_or(true)
-                            } else {
-                                true
-                            }
-                        }
-                        ParsedEvent::Raw(_) => false,
-                    };
+                        ParsedEvent::ErrorWithTrace { log, trace, line_count } => {
+                            let mut plugin_name = None;
+                            let mut event_name = None;
+                            let mut timestamp = None;
+                            let mut attribution = logmorph::models::error_event::AttributionKind::Unknown;
+                            let mut raw_message = trace.exception_message.clone();
 
-                    if should_display {
-                        engine.feed_event(event);
-                        let latest = engine.aggregated_errors();
-                        if let Some(err) = latest.first() {
-                            if let Some(target_p) = plugin {
-                                let matches = err.plugin_name.as_deref().map(|p| p.eq_ignore_ascii_case(target_p)).unwrap_or(false);
-                                if !matches {
-                                    continue;
+                            if let Some(ref l) = log {
+                                timestamp = l.timestamp.clone();
+                                if raw_message.is_none() {
+                                    raw_message = Some(l.message.clone());
+                                }
+                                if let Some(extracted) = logmorph::engine::minecraft_rules::MinecraftRules::extract_from_message(&l.message) {
+                                    plugin_name = Some(extracted.plugin_name);
+                                    event_name = extracted.event_name;
+                                    attribution = logmorph::models::error_event::AttributionKind::Confirmed;
+                                } else if let Some(ref src) = l.source {
+                                    plugin_name = Some(src.clone());
+                                    attribution = logmorph::models::error_event::AttributionKind::Confirmed;
                                 }
                             }
-                            let mut buf = String::new();
-                            renderer.format_single_error_detailed(&mut buf, err, 1);
-                            print!("{}", buf);
+
+                            if plugin_name.is_none() {
+                                let namespaces = logmorph::engine::frame_filter::FrameFilter::collect_plugin_namespaces(&trace, &std::collections::HashSet::new());
+                                if namespaces.len() == 1 {
+                                    attribution = logmorph::models::error_event::AttributionKind::DetectedFromStackFrame;
+                                    plugin_name = Some(namespaces[0].clone());
+                                } else if namespaces.len() > 1 {
+                                    attribution = logmorph::models::error_event::AttributionKind::Ambiguous;
+                                }
+                            }
+
+                            let top_frame = logmorph::engine::frame_filter::FrameFilter::find_top_plugin_frame(&trace, &std::collections::HashSet::new());
+
+                            let level_matches = target_level.as_ref().map(|t| log.as_ref().map(|l| &l.level == t).unwrap_or(true)).unwrap_or(true);
+                            let plugin_matches = plugin.map(|p| plugin_name.as_deref().map(|pn| pn.eq_ignore_ascii_case(p)).unwrap_or(false)).unwrap_or(true);
+
+                            let agg_err = logmorph::models::error_event::AggregatedError::new(
+                                0,
+                                trace.primary_exception.clone(),
+                                raw_message,
+                                plugin_name,
+                                event_name,
+                                attribution,
+                                top_frame,
+                                timestamp,
+                                trace.clone(),
+                            );
+
+                            engine.feed_event(ParsedEvent::ErrorWithTrace {
+                                log,
+                                trace,
+                                line_count,
+                            });
+
+                            if level_matches && plugin_matches {
+                                let mut buf = String::new();
+                                renderer.format_single_error_detailed(&mut buf, &agg_err, 1);
+                                print!("{}", buf);
+                            }
                         }
+                        ParsedEvent::Raw(_) => {}
                     }
                 }
             }
