@@ -3,8 +3,8 @@
 [![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org/)
 [![Paper](https://img.shields.io/badge/Paper-1.20%2B-blue.svg)](https://papermc.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)
-[![Downloads](https://img.shields.io/github/downloads/Raine-oss/LogMorph/total.svg)](#)
+[![Build Status](https://img.shields.io/badge/build-passing-success.svg)](https://github.com/Raine-oss/LogMorph/actions)
+[![Downloads](https://img.shields.io/github/downloads/Raine-oss/LogMorph/total.svg)](https://github.com/Raine-oss/LogMorph/releases)
 
 A zero-overhead, streaming log analyzer and stack trace deduplicator built specifically for Minecraft servers (Paper, Purpur, Spigot) and Java applications.
 
@@ -20,7 +20,10 @@ Choose the method that matches your server hosting setup:
 
 No SSH or root terminal access required. Works directly inside your server panel.
 
-1. Download `LogMorph-0.1.0.jar` from the [Latest Release](https://github.com/Raine-oss/LogMorph/releases/latest).
+[![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--0.1.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/latest/download/LogMorph-0.1.0.jar)
+[![View All Releases](https://img.shields.io/badge/GitHub-View_All_Releases-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases)
+
+1. Click the button above to download `LogMorph-0.1.0.jar`.
 2. Upload the `.jar` file into your server's `plugins/` directory.
 3. Restart or reload your server.
 4. Run commands directly in your Pterodactyl console or in-game:
@@ -44,10 +47,13 @@ Analysis runs entirely on an asynchronous background worker and will never freez
 
 ### Method B: Standalone CLI Binary (VPS, Dedicated Server, or Local PC)
 
+[![Download Linux Binary](https://img.shields.io/badge/Download_Linux-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph-linux-x86_64)
+[![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph-windows-x86_64.exe)
+
 #### Linux
 ```bash
 # Download the latest binary directly
-curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph
+curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph-linux-x86_64
 
 # Make it executable
 chmod +x logmorph
@@ -57,8 +63,11 @@ sudo mv logmorph /usr/local/bin/
 ```
 
 #### Windows
-1. Download `logmorph.exe` from the [Latest Release](https://github.com/Raine-oss/LogMorph/releases/latest).
-2. Place it in your server folder or run it from Command Prompt / PowerShell.
+1. Click the button above to download `logmorph-windows-x86_64.exe`.
+2. Place it in your server folder or run it from Command Prompt / PowerShell:
+```cmd
+logmorph-windows-x86_64.exe logs\latest.log
+```
 
 #### CLI Usage Examples
 ```bash
