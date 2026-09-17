@@ -1,21 +1,50 @@
 # LogMorph
 
 [![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org/)
+[![Paper](https://img.shields.io/badge/Paper-1.20%2B-blue.svg)](https://papermc.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)
 [![Downloads](https://img.shields.io/github/downloads/Raine-oss/LogMorph/total.svg)](#)
 
 A zero-overhead, streaming log analyzer and stack trace deduplicator built specifically for Minecraft servers (Paper, Purpur, Spigot) and Java applications.
 
+Available as both a **Minecraft Server Plugin** (for Pterodactyl and shared panels) and a **Standalone CLI Executable** (for VPS, terminal, and desktop).
+
 ---
 
 ## Quick Start for Server Owners
 
-If your server crashed or your console is spamming errors, you can run LogMorph immediately to find the root cause.
+Choose the method that matches your server hosting setup:
 
-### 1. Download & Install
+### Method A: Minecraft Server Plugin (Best for Pterodactyl & Shared Hosting)
 
-#### Linux (VPS / Dedicated Server)
+No SSH or root terminal access required. Works directly inside your server panel.
+
+1. Download `LogMorph-0.1.0.jar` from the [Latest Release](https://github.com/Raine-oss/LogMorph/releases/latest).
+2. Upload the `.jar` file into your server's `plugins/` directory.
+3. Restart or reload your server.
+4. Run commands directly in your Pterodactyl console or in-game:
+
+```text
+# Run full log analysis
+/logmorph
+# (or use the shortcut)
+/lm
+
+# View execution summary tables only
+/lm summary
+
+# Filter errors caused by a specific plugin
+/lm plugin WorldGuard
+```
+
+Analysis runs entirely on an asynchronous background worker and will never freeze or lag your server's main tick loop.
+
+---
+
+### Method B: Standalone CLI Binary (VPS, Dedicated Server, or Local PC)
+
+#### Linux
 ```bash
 # Download the latest binary directly
 curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph
@@ -23,7 +52,7 @@ curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/latest/downlo
 # Make it executable
 chmod +x logmorph
 
-# (Optional) Move to your system path for global access
+# (Optional) Move to system path for global access
 sudo mv logmorph /usr/local/bin/
 ```
 
@@ -31,12 +60,7 @@ sudo mv logmorph /usr/local/bin/
 1. Download `logmorph.exe` from the [Latest Release](https://github.com/Raine-oss/LogMorph/releases/latest).
 2. Place it in your server folder or run it from Command Prompt / PowerShell.
 
----
-
-### 2. Basic Usage
-
-Run LogMorph directly against your server's log file:
-
+#### CLI Usage Examples
 ```bash
 # Analyze your latest server log
 logmorph logs/latest.log
@@ -46,14 +70,11 @@ tail -f logs/latest.log | logmorph
 
 # Read an archived, compressed log
 zcat logs/2026-09-17-1.log.gz | logmorph
-```
 
-#### Handy Options
-```bash
 # Filter by a specific plugin name
 logmorph logs/latest.log --plugin WorldGuard
 
-# Show high-level summary tables only
+# Show summary tables only
 logmorph logs/latest.log --summary-only
 
 # Filter by minimum log level
@@ -122,28 +143,38 @@ LogMorph fixes this by:
 
 ## Build from Source
 
-If you prefer building from source, you only need Rust and Cargo installed:
-
+### 1. Build the Rust Core & CLI
 ```bash
-# Clone the repository
 git clone https://github.com/Raine-oss/LogMorph.git
 cd LogMorph
 
-# Build the release binary
+# Build the release CLI executable and native library
 cargo build --release
 
-# The compiled binary will be located at:
-# target/release/logmorph
+# The compiled binary will be at target/release/logmorph
+# The native shared library will be at target/release/liblogmorph.so
 ```
 
-To run the built-in test suite:
+### 2. Build the Paper/Spigot Plugin
 ```bash
+# Copy the compiled native library into plugin resources
+mkdir -p plugin/src/main/resources/natives/linux-x86_64
+cp target/release/liblogmorph.so plugin/src/main/resources/natives/linux-x86_64/
+
+# Package the plugin jar with Maven
+cd plugin
+mvn clean package
+
+# The ready-to-use plugin jar will be at plugin/target/LogMorph-0.1.0.jar
+```
+
+To run tests:
+```bash
+# Rust tests
 cargo test
-```
 
-To run the benchmark suite:
-```bash
-cargo bench --bench stream_benchmark -- --test
+# Plugin bridge tests
+cd plugin && mvn test
 ```
 
 ---

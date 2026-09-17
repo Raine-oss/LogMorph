@@ -1,0 +1,18 @@
+name: LogMorph
+version: '${project.version}'
+main: io.github.raine.logmorph.LogMorphPlugin
+api-version: '1.20'
+author: Raine-oss
+description: High-performance log parser and stack trace deduplicator
+
+commands:
+  logmorph:
+    description: Analyze server logs using LogMorph
+    aliases: [lm]
+    permission: logmorph.admin
+    usage: /<command> [summary|plugin <name>]
+
+permissions:
+  logmorph.admin:
+    description: Allows using LogMorph commands
+    default: op

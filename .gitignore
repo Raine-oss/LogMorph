@@ -1,3 +1,6 @@
 /target
+/plugin/target
+plugin/target/
+.vscode/
 **/*.rs.bk
 Cargo.lock

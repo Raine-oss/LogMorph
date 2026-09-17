@@ -3,6 +3,7 @@
 use crate::engine::aggregation::{AggregationEngine, AggregationStats};
 use crate::engine::frame_filter::FrameFilter;
 use crate::models::error_event::AggregatedError;
+use std::fmt::Write;
 
 // Color Formatter
 
@@ -87,52 +88,54 @@ impl TerminalRenderer {
 
     // Header Banner
 
-    pub fn render_banner(&self) {
-        println!("{}", self.styler.cyan("╔═══════════════════════════════════════════════════════════════╗"));
-        println!("{}", self.styler.cyan("║              LOGMORPH - MINECRAFT LOG ANALYZER               ║"));
-        println!("{}", self.styler.cyan("║           Streaming Parser & StackTrace Deduplicator         ║"));
-        println!("{}", self.styler.cyan("╚═══════════════════════════════════════════════════════════════╝"));
-        println!();
+    pub fn format_banner(&self, out: &mut String) {
+        let _ = writeln!(out, "{}", self.styler.cyan("╔═══════════════════════════════════════════════════════════════╗"));
+        let _ = writeln!(out, "{}", self.styler.cyan("║              LOGMORPH - MINECRAFT LOG ANALYZER               ║"));
+        let _ = writeln!(out, "{}", self.styler.cyan("║           Streaming Parser & StackTrace Deduplicator         ║"));
+        let _ = writeln!(out, "{}", self.styler.cyan("╚═══════════════════════════════════════════════════════════════╝"));
+        let _ = writeln!(out);
     }
 
     // Summary Tables
 
-    pub fn render_summary(&self, stats: &AggregationStats, plugin_summary: &[(&String, &usize)]) {
-        println!("{}", self.styler.bold("=== Execution Summary ==="));
-        println!("┌─────────────────────────────┬───────────────────────────┐");
-        println!("│ {:<27} │ {:>25} │", "Total Lines Processed", stats.total_lines);
-        println!("│ {:<27} │ {:>25} │", "Total Log Entries", stats.total_log_messages);
-        println!("│ {:<27} │ {:>25} │", self.styler.green("INFO Messages"), stats.info_count);
-        println!("│ {:<27} │ {:>25} │", self.styler.yellow("WARN Messages"), stats.warn_count);
-        println!("│ {:<27} │ {:>25} │", self.styler.red("ERROR Messages"), stats.error_count);
-        println!("│ {:<27} │ {:>25} │", self.styler.cyan("DEBUG Messages"), stats.debug_count);
-        println!("├─────────────────────────────┼───────────────────────────┤");
-        println!("│ {:<27} │ {:>25} │", self.styler.magenta("Total Exceptions Emitted"), stats.total_exceptions);
-        println!("│ {:<27} │ {:>25} │", self.styler.bold("Unique Error Signatures"), stats.unique_signatures);
-        println!("└─────────────────────────────┴───────────────────────────┘");
-        println!();
+    pub fn format_summary(&self, out: &mut String, stats: &AggregationStats, plugin_summary: &[(&String, &usize)]) {
+        let _ = writeln!(out, "{}", self.styler.bold("=== Execution Summary ==="));
+        let _ = writeln!(out, "┌─────────────────────────────┬───────────────────────────┐");
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", "Total Lines Processed", stats.total_lines);
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", "Total Log Entries", stats.total_log_messages);
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.green("INFO Messages"), stats.info_count);
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.yellow("WARN Messages"), stats.warn_count);
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.red("ERROR Messages"), stats.error_count);
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.cyan("DEBUG Messages"), stats.debug_count);
+        let _ = writeln!(out, "├─────────────────────────────┼───────────────────────────┤");
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.magenta("Total Exceptions Emitted"), stats.total_exceptions);
+        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.bold("Unique Error Signatures"), stats.unique_signatures);
+        let _ = writeln!(out, "└─────────────────────────────┴───────────────────────────┘");
+        let _ = writeln!(out);
 
         if !plugin_summary.is_empty() {
-            println!("{}", self.styler.bold("=== Top Offending Plugins ==="));
-            println!("┌────────────────────────────────┬────────────────────────┐");
-            println!("│ {:<30} │ {:>22} │", "Plugin Name", "Error Count");
-            println!("├────────────────────────────────┼────────────────────────┤");
+            let _ = writeln!(out, "{}", self.styler.bold("=== Top Offending Plugins ==="));
+            let _ = writeln!(out, "┌────────────────────────────────┬────────────────────────┐");
+            let _ = writeln!(out, "│ {:<30} │ {:>22} │", "Plugin Name", "Error Count");
+            let _ = writeln!(out, "├────────────────────────────────┼────────────────────────┤");
             for (plugin, count) in plugin_summary {
-                println!(
+                let _ = writeln!(
+                    out,
                     "│ {:<30} │ {:>22} │",
                     self.styler.yellow(plugin),
                     self.styler.red(&count.to_string())
                 );
             }
-            println!("└────────────────────────────────┴────────────────────────┘");
-            println!();
+            let _ = writeln!(out, "└────────────────────────────────┴────────────────────────┘");
+            let _ = writeln!(out);
         }
     }
 
     // Aggregated Errors
 
-    pub fn render_errors(
+    pub fn format_errors(
         &self,
+        out: &mut String,
         errors: &[&AggregatedError],
         plugin_filter: Option<&str>,
     ) {
@@ -151,24 +154,26 @@ impl TerminalRenderer {
             .collect();
 
         if filtered.is_empty() {
-            println!("{}", self.styler.green("✔ No matching error signatures found."));
+            let _ = writeln!(out, "{}", self.styler.green("✔ No matching error signatures found."));
             return;
         }
 
-        println!(
+        let _ = writeln!(
+            out,
             "{}",
             self.styler.bold(&format!(
                 "=== Aggregated Error Signatures ({}) ===",
                 filtered.len()
             ))
         );
-        println!();
+        let _ = writeln!(out);
 
         for (idx, err) in filtered.iter().enumerate() {
             let occurrence_badge = self.styler.red(&format!("[Occurrences: {}]", err.occurrences));
             let hash_badge = self.styler.dim(&format!("(Signature: 0x{:016x})", err.signature_hash));
 
-            println!(
+            let _ = writeln!(
+                out,
                 "{} {} {} {}",
                 self.styler.bold(&format!("#{}", idx + 1)),
                 occurrence_badge,
@@ -182,18 +187,18 @@ impl TerminalRenderer {
                     .as_deref()
                     .map(|ev| format!(" on Event {}", self.styler.cyan(ev)))
                     .unwrap_or_default();
-                println!("  Plugin: {}{}", self.styler.yellow(plugin), event_info);
+                let _ = writeln!(out, "  Plugin: {}{}", self.styler.yellow(plugin), event_info);
             }
 
             if let Some(ref msg) = err.exception_message {
-                println!("  Message: {}", msg);
+                let _ = writeln!(out, "  Message: {}", msg);
             }
 
             if let (Some(first), Some(last)) = (&err.first_seen, &err.last_seen) {
                 if first == last {
-                    println!("  Timestamp: {}", self.styler.dim(first));
+                    let _ = writeln!(out, "  Timestamp: {}", self.styler.dim(first));
                 } else {
-                    println!("  Timeline: {} -> {}", self.styler.dim(first), self.styler.dim(last));
+                    let _ = writeln!(out, "  Timeline: {} -> {}", self.styler.dim(first), self.styler.dim(last));
                 }
             }
 
@@ -203,7 +208,8 @@ impl TerminalRenderer {
                     (Some(f), None) => f.clone(),
                     _ => "Unknown source".to_string(),
                 };
-                println!(
+                let _ = writeln!(
+                    out,
                     "  {} {}.{}({})",
                     self.styler.green("↳ Root Plugin Frame:"),
                     self.styler.cyan(&top.class_name),
@@ -212,7 +218,7 @@ impl TerminalRenderer {
                 );
             }
 
-            println!("  Stack Trace (Key Frames):");
+            let _ = writeln!(out, "  Stack Trace (Key Frames):");
             let mut plugin_frames_printed = 0;
             for frame in &err.sample_trace.frames {
                 let is_plugin = FrameFilter::is_plugin_frame(frame);
@@ -224,7 +230,8 @@ impl TerminalRenderer {
 
                 if is_plugin {
                     plugin_frames_printed += 1;
-                    println!(
+                    let _ = writeln!(
+                        out,
                         "    {} {}.{}({})",
                         self.styler.green("▶"),
                         self.styler.cyan(&frame.class_name),
@@ -232,7 +239,8 @@ impl TerminalRenderer {
                         loc
                     );
                 } else if plugin_frames_printed < 2 {
-                    println!(
+                    let _ = writeln!(
+                        out,
                         "      {} {}.{}({})",
                         self.styler.dim("·"),
                         self.styler.dim(&frame.class_name),
@@ -243,9 +251,9 @@ impl TerminalRenderer {
             }
 
             if let Some(ref caused) = err.sample_trace.caused_by {
-                println!("    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception));
+                let _ = writeln!(out, "    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception));
                 if let Some(ref cmsg) = caused.exception_message {
-                    println!("      {}", cmsg);
+                    let _ = writeln!(out, "      {}", cmsg);
                 }
                 for frame in &caused.frames {
                     if FrameFilter::is_plugin_frame(frame) {
@@ -253,7 +261,8 @@ impl TerminalRenderer {
                             (Some(f), Some(l)) => format!("{}:{}", f, l),
                             _ => "Unknown".to_string(),
                         };
-                        println!(
+                        let _ = writeln!(
+                            out,
                             "      {} {}.{}({})",
                             self.styler.green("▶"),
                             self.styler.cyan(&frame.class_name),
@@ -264,9 +273,28 @@ impl TerminalRenderer {
                 }
             }
 
-            println!();
+            let _ = writeln!(out);
         }
     }
+
+    // Format All Output
+
+    pub fn format_all(
+        &self,
+        engine: &AggregationEngine,
+        summary_only: bool,
+        plugin_filter: Option<&str>,
+    ) -> String {
+        let mut out = String::with_capacity(4096);
+        self.format_banner(&mut out);
+        self.format_summary(&mut out, engine.stats(), &engine.plugin_summary());
+        if !summary_only {
+            self.format_errors(&mut out, &engine.aggregated_errors(), plugin_filter);
+        }
+        out
+    }
+
+    // Render All Output
 
     pub fn render_all(
         &self,
@@ -274,10 +302,7 @@ impl TerminalRenderer {
         summary_only: bool,
         plugin_filter: Option<&str>,
     ) {
-        self.render_banner();
-        self.render_summary(engine.stats(), &engine.plugin_summary());
-        if !summary_only {
-            self.render_errors(&engine.aggregated_errors(), plugin_filter);
-        }
+        let output = self.format_all(engine, summary_only, plugin_filter);
+        print!("{}", output);
     }
 }
