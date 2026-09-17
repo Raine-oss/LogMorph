@@ -236,40 +236,37 @@ logmorph analyze logs/latest.log --max-signatures 1000
 ### Standard Terminal Output
 ```text
 === Execution Summary ===
-┌─────────────────────────────┬───────────────────────────┐
-│ Total Lines Processed       │                        18 │
-│ Total Log Entries           │                         6 │
-│ INFO Messages               │                         5 │
-│ WARN Messages               │                         0 │
-│ ERROR Messages              │                         1 │
-│ DEBUG Messages              │                         0 │
-├─────────────────────────────┼───────────────────────────┤
-│ Total Exceptions Emitted    │                         1 │
-│ Unique Error Signatures     │                         1 │
-└─────────────────────────────┴───────────────────────────┘
++-----------------------------+---------------------------+
+| Total Lines Processed       |                        18 |
+| Total Log Entries           |                         6 |
+| INFO Messages               |                         5 |
+| WARN Messages               |                         0 |
+| ERROR Messages              |                         1 |
+| DEBUG Messages              |                         0 |
++-----------------------------+---------------------------+
+| Total Exceptions Emitted    |                         1 |
+| Unique Error Signatures     |                         1 |
++-----------------------------+---------------------------+
 
 === Top Offending Plugins ===
-┌────────────────────────────────┬────────────────────────┐
-│ Plugin Name                    │            Error Count │
-├────────────────────────────────┼────────────────────────┤
-│ MyCustomPlugin                 │                      1 │
-└────────────────────────────────┴────────────────────────┘
++--------------------------------+------------------------+
+| Plugin Name                    |            Error Count |
++--------------------------------+------------------------+
+| MyCustomPlugin                 |                      1 |
++--------------------------------+------------------------+
 
 === Aggregated Error Signatures (1) ===
 
 #1 [Occurrences: 1] org.bukkit.event.EventException (Signature: 0x09e4a6440f4c7d70)
   Plugin: MyCustomPlugin on Event PlayerMoveEvent (Confirmed)
   Timestamp: 12:00:05
-  ↳ Root Plugin Frame: com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
+  -> Root Plugin Frame: com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
   Stack Trace (Key Frames):
-      · org.bukkit.plugin.java.JavaPluginLoader$1.execute(JavaPluginLoader.java:310)
-      · io.papermc.paper.plugin.manager.PaperEventManager.callEvent(PaperEventManager.java:54)
-    ▶ com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
-      · net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:1100)
+    > com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
     Caused by: java.lang.NullPointerException
       Cannot invoke "org.bukkit.entity.Player.getName()" because "player" is null
-      ▶ com.example.myplugin.services.ScoreboardManager.update(ScoreboardManager.java:88)
-      ▶ com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:43)
+      > com.example.myplugin.services.ScoreboardManager.update(ScoreboardManager.java:88)
+      > com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:43)
 ```
 
 ### JSON Schema (`--format json` or `export`)

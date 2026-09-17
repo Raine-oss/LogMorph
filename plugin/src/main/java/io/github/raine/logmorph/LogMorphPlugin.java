@@ -184,10 +184,12 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
                         return;
                     }
                     if (isConsole) {
-                        sender.sendMessage(result);
+                        for (String line : result.split("\r?\n")) {
+                            sender.sendMessage(line);
+                        }
                     } else {
                         String formatted = formatForChat(result);
-                        for (String line : formatted.split("\n")) {
+                        for (String line : formatted.split("\r?\n")) {
                             if (!line.trim().isEmpty()) {
                                 sender.sendMessage(line);
                             }

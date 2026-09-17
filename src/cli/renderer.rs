@@ -86,13 +86,25 @@ impl TerminalRenderer {
         }
     }
 
+    // Padding Helpers
+
+    fn pad_left(styled_text: &str, visible_len: usize, target_width: usize) -> String {
+        let padding = target_width.saturating_sub(visible_len);
+        format!("{}{}", styled_text, " ".repeat(padding))
+    }
+
+    fn pad_right(styled_text: &str, visible_len: usize, target_width: usize) -> String {
+        let padding = target_width.saturating_sub(visible_len);
+        format!("{}{}", " ".repeat(padding), styled_text)
+    }
+
     // Header Banner
 
     pub fn format_banner(&self, out: &mut String) {
-        let _ = writeln!(out, "{}", self.styler.cyan("╔═══════════════════════════════════════════════════════════════╗"));
-        let _ = writeln!(out, "{}", self.styler.cyan("║              LOGMORPH - MINECRAFT LOG ANALYZER               ║"));
-        let _ = writeln!(out, "{}", self.styler.cyan("║           Streaming Parser & StackTrace Deduplicator         ║"));
-        let _ = writeln!(out, "{}", self.styler.cyan("╚═══════════════════════════════════════════════════════════════╝"));
+        let _ = writeln!(out, "{}", self.styler.cyan("+---------------------------------------------------------------+"));
+        let _ = writeln!(out, "{}", self.styler.cyan("|              LOGMORPH - MINECRAFT LOG ANALYZER                |"));
+        let _ = writeln!(out, "{}", self.styler.cyan("|           Streaming Parser & StackTrace Deduplicator          |"));
+        let _ = writeln!(out, "{}", self.styler.cyan("+---------------------------------------------------------------+"));
         let _ = writeln!(out);
     }
 
@@ -106,36 +118,69 @@ impl TerminalRenderer {
 
     pub fn format_summary(&self, out: &mut String, stats: &AggregationStats, plugin_summary: &[(&String, &usize)]) {
         let _ = writeln!(out, "{}", self.styler.bold("=== Execution Summary ==="));
-        let _ = writeln!(out, "┌─────────────────────────────┬───────────────────────────┐");
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", "Total Lines Processed", stats.total_lines);
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", "Total Log Entries", stats.total_log_messages);
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.green("INFO Messages"), stats.info_count);
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.yellow("WARN Messages"), stats.warn_count);
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.red("ERROR Messages"), stats.error_count);
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.cyan("DEBUG Messages"), stats.debug_count);
-        let _ = writeln!(out, "├─────────────────────────────┼───────────────────────────┤");
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.magenta("Total Exceptions Emitted"), stats.total_exceptions);
-        let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.bold("Unique Error Signatures"), stats.unique_signatures);
+        let _ = writeln!(out, "+-----------------------------+---------------------------+");
+        let _ = writeln!(out, "| {:<27} | {:>25} |", "Total Lines Processed", stats.total_lines);
+        let _ = writeln!(out, "| {:<27} | {:>25} |", "Total Log Entries", stats.total_log_messages);
+        let _ = writeln!(
+            out,
+            "| {} | {:>25} |",
+            Self::pad_left(&self.styler.green("INFO Messages"), 13, 27),
+            stats.info_count
+        );
+        let _ = writeln!(
+            out,
+            "| {} | {:>25} |",
+            Self::pad_left(&self.styler.yellow("WARN Messages"), 13, 27),
+            stats.warn_count
+        );
+        let _ = writeln!(
+            out,
+            "| {} | {:>25} |",
+            Self::pad_left(&self.styler.red("ERROR Messages"), 14, 27),
+            stats.error_count
+        );
+        let _ = writeln!(
+            out,
+            "| {} | {:>25} |",
+            Self::pad_left(&self.styler.cyan("DEBUG Messages"), 14, 27),
+            stats.debug_count
+        );
+        let _ = writeln!(out, "+-----------------------------+---------------------------+");
+        let _ = writeln!(
+            out,
+            "| {} | {:>25} |",
+            Self::pad_left(&self.styler.magenta("Total Exceptions Emitted"), 24, 27),
+            stats.total_exceptions
+        );
+        let _ = writeln!(
+            out,
+            "| {} | {:>25} |",
+            Self::pad_left(&self.styler.bold("Unique Error Signatures"), 23, 27),
+            stats.unique_signatures
+        );
         if stats.dropped_signatures > 0 {
-            let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.red("Dropped Signatures (Cap)"), stats.dropped_signatures);
+            let _ = writeln!(
+                out,
+                "| {} | {:>25} |",
+                Self::pad_left(&self.styler.red("Dropped Signatures (Cap)"), 24, 27),
+                stats.dropped_signatures
+            );
         }
-        let _ = writeln!(out, "└─────────────────────────────┴───────────────────────────┘");
+        let _ = writeln!(out, "+-----------------------------+---------------------------+");
         let _ = writeln!(out);
 
         if !plugin_summary.is_empty() {
             let _ = writeln!(out, "{}", self.styler.bold("=== Top Offending Plugins ==="));
-            let _ = writeln!(out, "┌────────────────────────────────┬────────────────────────┐");
-            let _ = writeln!(out, "│ {:<30} │ {:>22} │", "Plugin Name", "Error Count");
-            let _ = writeln!(out, "├────────────────────────────────┼────────────────────────┤");
+            let _ = writeln!(out, "+--------------------------------+------------------------+");
+            let _ = writeln!(out, "| {:<30} | {:>22} |", "Plugin Name", "Error Count");
+            let _ = writeln!(out, "+--------------------------------+------------------------+");
             for (plugin, count) in plugin_summary {
-                let _ = writeln!(
-                    out,
-                    "│ {:<30} │ {:>22} │",
-                    self.styler.yellow(plugin),
-                    self.styler.red(&count.to_string())
-                );
+                let count_str = count.to_string();
+                let col1 = Self::pad_left(&self.styler.yellow(plugin), plugin.len(), 30);
+                let col2 = Self::pad_right(&self.styler.red(&count_str), count_str.len(), 22);
+                let _ = writeln!(out, "| {} | {} |", col1, col2);
             }
-            let _ = writeln!(out, "└────────────────────────────────┴────────────────────────┘");
+            let _ = writeln!(out, "+--------------------------------+------------------------+");
             let _ = writeln!(out);
         }
     }
@@ -163,7 +208,7 @@ impl TerminalRenderer {
             .collect();
 
         if filtered.is_empty() {
-            let _ = writeln!(out, "{}", self.styler.green("✔ No matching error signatures found."));
+            let _ = writeln!(out, "{}", self.styler.green("No matching error signatures found."));
             return;
         }
 
@@ -226,7 +271,7 @@ impl TerminalRenderer {
             let _ = writeln!(
                 out,
                 "  {} {}.{}({})",
-                self.styler.green("↳ Root Plugin Frame:"),
+                self.styler.green("-> Root Plugin Frame:"),
                 self.styler.cyan(&top.class_name),
                 self.styler.bold(&top.method_name),
                 location
@@ -250,7 +295,7 @@ impl TerminalRenderer {
             if is_plugin {
                 key_lines.push(format!(
                     "    {} {}.{}({})",
-                    self.styler.green("▶"),
+                    self.styler.green(">"),
                     self.styler.cyan(&frame.class_name),
                     frame.method_name,
                     loc
@@ -268,7 +313,7 @@ impl TerminalRenderer {
                     };
                     caused_lines.push(format!(
                         "      {} {}.{}({})",
-                        self.styler.green("▶"),
+                        self.styler.green(">"),
                         self.styler.cyan(&frame.class_name),
                         frame.method_name,
                         loc
@@ -364,7 +409,7 @@ impl TerminalRenderer {
                         let _ = writeln!(
                             out,
                             "  {} {}.{}({})",
-                            self.styler.green("▶ [Plugin]"),
+                            self.styler.green("> [Plugin]"),
                             self.styler.cyan(&frame.class_name),
                             frame.method_name,
                             loc
@@ -410,7 +455,7 @@ impl TerminalRenderer {
                             let _ = writeln!(
                                 out,
                                 "  {} {}.{}({})",
-                                self.styler.green("▶ [Plugin]"),
+                                self.styler.green("> [Plugin]"),
                                 self.styler.cyan(&frame.class_name),
                                 frame.method_name,
                                 loc
