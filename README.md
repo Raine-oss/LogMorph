@@ -6,9 +6,41 @@
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)](https://github.com/Raine-oss/LogMorph/actions)
 [![Downloads](https://img.shields.io/github/downloads/Raine-oss/LogMorph/total.svg)](https://github.com/Raine-oss/LogMorph/releases)
 
-A zero-overhead, streaming log analyzer and stack trace deduplicator built specifically for Minecraft servers (Paper, Purpur, Spigot) and Java applications.
+A streaming log analyzer and stack trace deduplicator for Minecraft servers and Java applications, built with Rust. Designed for low memory usage, fast processing, and readable error summaries.
 
 Available as both a **Minecraft Server Plugin** (for Pterodactyl and shared panels) and a **Standalone CLI Executable** (for VPS, terminal, and desktop).
+
+---
+
+## Project Status
+
+LogMorph is currently in active development.
+
+### Available
+- Streaming log parsing with low memory overhead
+- Log level classification (INFO, WARN, ERROR, DEBUG, TRACE)
+- Stack trace multiline grouping and nested `Caused by` extraction
+- Deterministic error signature generation and deduplication
+- Command-line interface with subcommands (`analyze`, `summary`, `inspect`, `watch`, `export`)
+- Structured JSON output support (`--format json`) for automated tooling
+- Memory ceiling control via `--max-signatures <N>`
+- Minecraft Paper/Spigot plugin integration with asynchronous execution
+
+### In Progress
+- Expanded platform packaging (Linux ARM64, macOS)
+- Standardized multi-GB performance benchmarks across hardware configurations
+- Expanded parser rules for proxy and alternative server software (Velocity, BungeeCord, Fabric)
+
+---
+
+## Platform Support Matrix
+
+| Platform | CLI Executable | Plugin Native Library |
+| :--- | :--- | :--- |
+| **Linux x86_64** | Supported | Supported |
+| **Windows x86_64** | Supported | Supported (CLI) |
+| **Linux ARM64** | Planned | Planned |
+| **macOS (Apple Silicon)** | Planned | Planned |
 
 ---
 
@@ -23,7 +55,7 @@ No SSH or root terminal access required. Works directly inside your server panel
 [![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--0.1.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar)
 [![View Release v0.1.0](https://img.shields.io/badge/GitHub-Release_v0.1.0-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/tag/v0.1.0)
 
-1. Click the button above to download [`LogMorph-0.1.0.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar) (or [`LogMorph.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph.jar)).
+1. Download [`LogMorph-0.1.0.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar) (or [`LogMorph.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph.jar)).
 2. Upload the `.jar` file into your server's `plugins/` directory.
 3. Restart or reload your server.
 4. Run commands directly in your Pterodactyl console or in-game:
@@ -41,8 +73,6 @@ No SSH or root terminal access required. Works directly inside your server panel
 /lm plugin WorldGuard
 ```
 
-Analysis runs entirely on an asynchronous background worker and will never freeze or lag your server's main tick loop.
-
 ---
 
 ### Method B: Standalone CLI Binary (VPS, Dedicated Server, or Local PC)
@@ -50,7 +80,7 @@ Analysis runs entirely on an asynchronous background worker and will never freez
 [![Download Linux Binary](https://img.shields.io/badge/Download_Linux-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64)
 [![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe)
 
-#### Linux (Direct Download & Run)
+#### Linux
 ```bash
 # Download the v0.1.0 Linux executable
 curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64
@@ -62,104 +92,197 @@ chmod +x logmorph
 sudo mv logmorph /usr/local/bin/
 ```
 
-#### Windows (Direct Download & Run)
-1. Click the button above to download [`logmorph-windows-x86_64.exe`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe).
+#### Windows
+1. Download [`logmorph-windows-x86_64.exe`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe).
 2. Place it in your server folder or run it from Command Prompt / PowerShell:
 ```cmd
-logmorph-windows-x86_64.exe logs\latest.log
-```
-
-#### CLI Usage Examples
-```bash
-# Analyze your latest server log
-logmorph logs/latest.log
-
-# Monitor live server logs in real-time
-tail -f logs/latest.log | logmorph
-
-# Read an archived, compressed log
-zcat logs/2026-09-17-1.log.gz | logmorph
-
-# Filter by a specific plugin name
-logmorph logs/latest.log --plugin WorldGuard
-
-# Show summary tables only
-logmorph logs/latest.log --summary-only
-
-# Filter by minimum log level
-logmorph logs/latest.log --level ERROR
-
-# Disable colors for plain text files or script outputs
-logmorph logs/latest.log --no-color
+logmorph-windows-x86_64.exe analyze logs\latest.log
 ```
 
 ---
 
-## All Available Release Assets (v0.1.0)
+## Input Sources
 
-All builds for version `v0.1.0` are available on the [Release v0.1.0 Page](https://github.com/Raine-oss/LogMorph/releases/tag/v0.1.0):
+LogMorph supports multiple input modes:
 
-| Platform / Environment | File Name | Direct Download Link |
-| :--- | :--- | :--- |
-| **Minecraft Server Plugin** | `LogMorph-0.1.0.jar` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar) |
-| **Minecraft Server Plugin (Standard)** | `LogMorph.jar` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph.jar) |
-| **Linux CLI (x86_64)** | `logmorph-linux-x86_64` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64) |
-| **Windows CLI (x86_64)** | `logmorph-windows-x86_64.exe` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe) |
+- **File Path**: Direct reading from disk via buffered streams:
+  ```bash
+  logmorph analyze logs/latest.log
+  ```
+- **Standard Input (Pipe)**: Processing streams from pipes:
+  ```bash
+  cat logs/latest.log | logmorph analyze
+  ```
+- **Compressed Archives**: Reading compressed log archives without manual extraction:
+  ```bash
+  zcat logs/2026-09-17-1.log.gz | logmorph analyze
+  ```
+- **Live Monitoring (Watch Mode)**: Following live log files as new lines are appended:
+  ```bash
+  logmorph watch logs/latest.log
+  ```
+
+Commands such as `analyze`, `summary`, and `export` stream data until End-Of-File (EOF). The `watch` command operates continuously until interrupted (Ctrl+C).
 
 ---
 
-## What Problem Does LogMorph Solve?
-
-When a plugin throws an error in an event loop or a tick task, your console often gets flooded with thousands of identical lines. Reading through a 500 MB log file manually to find what went wrong is slow, difficult, and can freeze standard text editors.
-
-LogMorph fixes this by:
-
-1. **Deduplicating Repeated Errors**: If an exception appears 5,000 times, LogMorph compresses it into a single clean entry showing the exact occurrence count, the first time it happened, and the last time it happened.
-2. **Filtering Framework Noise**: Minecraft logs contain dozens of internal frames (`net.minecraft`, `org.bukkit`, `com.destroystokyo.paper`, `java.lang.reflect`). LogMorph identifies and highlights the exact line in your plugin that failed, while muting the framework boilerplate.
-3. **Streaming with Constant Memory**: LogMorph processes logs line-by-line via buffered streams. It uses the exact same tiny memory footprint whether analyzing a 50 KB file or a 10 GB file.
-
----
-
-## Output Example
+## CLI Commands & Subcommands
 
 ```text
+logmorph [COMMAND] [OPTIONS]
+
+Commands:
+  analyze   Analyze a log file and display aggregated errors [default]
+  summary   Display execution summary tables only
+  inspect   Inspect full stack trace and details for a specific error (alias: show)
+  export    Export structured analysis data as JSON
+  watch     Monitor a log file in real-time as lines arrive
+  help      Print this message or the help of the given subcommand(s)
+```
+
+### Examples
+
+```bash
+# 1. Full analysis with ANSI formatting
+logmorph analyze logs/latest.log
+
+# 2. View statistical summary table only
+logmorph summary logs/latest.log
+
+# 3. Inspect full stack trace and cause chain of error signature #1
+logmorph inspect logs/latest.log --error 1
+
+# 4. Export structured report as JSON for CI or dashboards
+logmorph export logs/latest.log --format json
+
+# 5. Cap maximum tracked error signatures in memory
+logmorph analyze logs/latest.log --max-signatures 500
+
+# 6. Filter by plugin or log level
+logmorph analyze logs/latest.log --plugin WorldGuard --level ERROR
+```
+
+---
+
+## Error Deduplication & Memory Model
+
+When a plugin encounters a repeating error in a game loop or tick event, logs can accumulate thousands of identical stack traces.
+
+### How Signatures are Built
+LogMorph normalizes repeated errors into deterministic 64-bit signatures. A signature incorporates:
+- The primary exception class (e.g. `java.lang.NullPointerException`).
+- Plugin attribution (extracted from log prefix, event marker, or top non-framework class).
+- The root non-framework stack frame (class name, method name, file, line number).
+- Nested `Caused by` exceptions.
+
+Dynamic tokens, timestamps, and thread identifiers are excluded to ensure identical issues map to the same signature regardless of when they occur.
+
+### Memory Behavior
+LogMorph processes log lines via buffered streaming without buffering the entire file in memory. Working memory is primarily proportional to the number of **unique error signatures** tracked.
+
+To prevent unbounded memory consumption on files containing tens of thousands of distinct exceptions, pass the `--max-signatures <N>` flag:
+```bash
+logmorph analyze logs/latest.log --max-signatures 1000
+```
+When this limit is reached, existing signatures continue accumulating occurrence counts, while new distinct signatures increment the dropped signatures counter without allocating additional entries.
+
+---
+
+## Output Examples
+
+### Standard Terminal Output
+```text
 === Execution Summary ===
-+-----------------------------+---------------------------+
-| Total Lines Processed       |                        18 |
-| Total Log Entries           |                         6 |
-| INFO Messages               |                         5 |
-| WARN Messages               |                         0 |
-| ERROR Messages              |                         1 |
-| DEBUG Messages              |                         0 |
-+-----------------------------+---------------------------+
-| Total Exceptions Emitted    |                         1 |
-| Unique Error Signatures     |                         1 |
-+-----------------------------+---------------------------+
+┌─────────────────────────────┬───────────────────────────┐
+│ Total Lines Processed       │                        18 │
+│ Total Log Entries           │                         6 │
+│ INFO Messages               │                         5 │
+│ WARN Messages               │                         0 │
+│ ERROR Messages              │                         1 │
+│ DEBUG Messages              │                         0 │
+├─────────────────────────────┼───────────────────────────┤
+│ Total Exceptions Emitted    │                         1 │
+│ Unique Error Signatures     │                         1 │
+└─────────────────────────────┴───────────────────────────┘
 
 === Top Offending Plugins ===
-+--------------------------------+------------------------+
-| Plugin Name                    |            Error Count |
-+--------------------------------+------------------------+
-| MyCustomPlugin                 |                      1 |
-+--------------------------------+------------------------+
+┌────────────────────────────────┬────────────────────────┐
+│ Plugin Name                    │            Error Count │
+├────────────────────────────────┼────────────────────────┤
+│ MyCustomPlugin                 │                      1 │
+└────────────────────────────────┴────────────────────────┘
 
 === Aggregated Error Signatures (1) ===
 
 #1 [Occurrences: 1] org.bukkit.event.EventException (Signature: 0x09e4a6440f4c7d70)
-  Plugin: MyCustomPlugin on Event PlayerMoveEvent
-  Message: null
+  Plugin: MyCustomPlugin on Event PlayerMoveEvent (Confirmed)
   Timestamp: 12:00:05
-  Root Plugin Frame: com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
+  ↳ Root Plugin Frame: com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
   Stack Trace (Key Frames):
-      . org.bukkit.plugin.java.JavaPluginLoader$1.execute(JavaPluginLoader.java:310)
-      . io.papermc.paper.plugin.manager.PaperEventManager.callEvent(PaperEventManager.java:54)
-    > com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
-      . net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:1100)
+      · org.bukkit.plugin.java.JavaPluginLoader$1.execute(JavaPluginLoader.java:310)
+      · io.papermc.paper.plugin.manager.PaperEventManager.callEvent(PaperEventManager.java:54)
+    ▶ com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45)
+      · net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:1100)
     Caused by: java.lang.NullPointerException
       Cannot invoke "org.bukkit.entity.Player.getName()" because "player" is null
-      > com.example.myplugin.services.ScoreboardManager.update(ScoreboardManager.java:88)
-      > com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:43)
+      ▶ com.example.myplugin.services.ScoreboardManager.update(ScoreboardManager.java:88)
+      ▶ com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:43)
 ```
+
+### JSON Output (`--format json`)
+```json
+{
+  "stats": {
+    "total_lines": 18,
+    "total_log_messages": 6,
+    "info_count": 5,
+    "warn_count": 0,
+    "error_count": 1,
+    "debug_count": 0,
+    "total_exceptions": 1,
+    "unique_signatures": 1,
+    "dropped_signatures": 0
+  },
+  "top_plugins": [
+    {
+      "plugin": "MyCustomPlugin",
+      "count": 1
+    }
+  ],
+  "aggregated_errors": [
+    {
+      "signature_hash": 712877452276039024,
+      "primary_exception": "org.bukkit.event.EventException",
+      "exception_message": null,
+      "plugin_name": "MyCustomPlugin",
+      "event_name": "PlayerMoveEvent",
+      "attribution": "Confirmed",
+      "occurrences": 1,
+      "first_seen": "12:00:05",
+      "last_seen": "12:00:05"
+    }
+  ]
+}
+```
+
+---
+
+## Plugin Safety
+
+The companion Paper/Spigot plugin follows strict server safety practices:
+- **Asynchronous Execution**: All log analysis and native JNI operations execute on background workers (`Bukkit.getScheduler().runTaskAsynchronously`) to prevent tick lag or server freezes.
+- **Exception Isolation**: Native Rust routines are wrapped in panic catchers (`std::panic::catch_unwind`) to prevent JVM crashes.
+- **Read-Only**: The plugin only reads log files. It does not modify server configuration, player data, world files, or gameplay behavior.
+
+---
+
+## Benchmarks
+
+Benchmark suites are implemented using `criterion`:
+```bash
+cargo bench --bench stream_benchmark -- --test
+```
+Standardized multi-GB benchmarks (measuring throughput, peak resident memory, and deduplication latency across 1 MB to 1 GB log sets) are actively being prepared.
 
 ---
 
@@ -170,34 +293,37 @@ LogMorph fixes this by:
 git clone https://github.com/Raine-oss/LogMorph.git
 cd LogMorph
 
-# Build the release CLI executable and native library
+# Build release executable and shared library
 cargo build --release
-
-# The compiled binary will be at target/release/logmorph
-# The native shared library will be at target/release/liblogmorph.so
 ```
 
 ### 2. Build the Paper/Spigot Plugin
 ```bash
-# Copy the compiled native library into plugin resources
+# Copy native shared library into plugin resources
 mkdir -p plugin/src/main/resources/natives/linux-x86_64
 cp target/release/liblogmorph.so plugin/src/main/resources/natives/linux-x86_64/
 
-# Package the plugin jar with Maven
+# Package plugin jar with Maven
 cd plugin
 mvn clean package
-
-# The ready-to-use plugin jar will be at plugin/target/LogMorph-0.1.0.jar
 ```
 
-To run tests:
+### Running Tests
 ```bash
-# Rust tests
+# Rust unit and integration tests
 cargo test
 
-# Plugin bridge tests
+# Java JNI bridge tests
 cd plugin && mvn test
 ```
+
+---
+
+## Governance & Contributing
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [MIT License](LICENSE)
 
 ---
 
@@ -213,4 +339,4 @@ LogMorph is maintained by **Raine-oss**.
 
 ## License
 
-LogMorph is 100% free and open-source software released under the [MIT License](LICENSE). You are welcome to use, modify, and distribute it freely.
+LogMorph is free and open-source software licensed under the [MIT License](LICENSE).

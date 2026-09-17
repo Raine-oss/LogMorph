@@ -1,6 +1,9 @@
 // Log Level
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum LogLevel {
     Info,
     Warn,
@@ -36,7 +39,7 @@ impl LogLevel {
 
 // Log Line
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LogLine {
     pub timestamp: Option<String>,
     pub level: LogLevel,

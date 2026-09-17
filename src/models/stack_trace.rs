@@ -1,6 +1,8 @@
 // Stack Frame
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct StackFrame {
     pub class_name: String,
     pub method_name: String,
@@ -29,7 +31,7 @@ impl StackFrame {
 
 // Stack Trace Block
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StackTraceBlock {
     pub primary_exception: String,
     pub exception_message: Option<String>,

@@ -2,15 +2,16 @@
 
 use crate::engine::fingerprint::FingerprintGenerator;
 use crate::engine::minecraft_rules::MinecraftRules;
-use crate::models::error_event::AggregatedError;
+use crate::models::error_event::{AggregatedError, AttributionKind};
 use crate::models::log_line::{LogLevel, LogLine};
 use crate::models::stack_trace::StackTraceBlock;
 use crate::parser::state_machine::ParsedEvent;
+use serde::Serialize;
 use std::collections::HashMap;
 
 // Aggregation Stats
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct AggregationStats {
     pub total_lines: usize,
     pub total_log_messages: usize,
@@ -20,6 +21,24 @@ pub struct AggregationStats {
     pub debug_count: usize,
     pub total_exceptions: usize,
     pub unique_signatures: usize,
+    pub dropped_signatures: usize,
+}
+
+// Plugin Count
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PluginCount {
+    pub plugin: String,
+    pub count: usize,
+}
+
+// Analysis Report
+
+#[derive(Debug, Serialize)]
+pub struct AnalysisReport<'a> {
+    pub stats: &'a AggregationStats,
+    pub top_plugins: Vec<PluginCount>,
+    pub aggregated_errors: Vec<&'a AggregatedError>,
 }
 
 // Engine Implementation
@@ -28,6 +47,7 @@ pub struct AggregationEngine {
     errors_by_signature: HashMap<u64, AggregatedError>,
     plugin_error_counts: HashMap<String, usize>,
     stats: AggregationStats,
+    max_signatures: Option<usize>,
 }
 
 impl AggregationEngine {
@@ -36,6 +56,16 @@ impl AggregationEngine {
             errors_by_signature: HashMap::new(),
             plugin_error_counts: HashMap::new(),
             stats: AggregationStats::default(),
+            max_signatures: None,
+        }
+    }
+
+    pub fn with_max_signatures(max_signatures: Option<usize>) -> Self {
+        Self {
+            errors_by_signature: HashMap::new(),
+            plugin_error_counts: HashMap::new(),
+            stats: AggregationStats::default(),
+            max_signatures,
         }
     }
 
@@ -79,19 +109,22 @@ impl AggregationEngine {
         let mut plugin_name = None;
         let mut event_name = None;
         let mut timestamp = None;
-        let mut exception_message = trace.exception_message.clone();
+        let mut attribution = AttributionKind::Unknown;
+        let mut raw_message = trace.exception_message.clone();
 
         if let Some(ref l) = log {
             timestamp = l.timestamp.clone();
-            if exception_message.is_none() {
-                exception_message = Some(l.message.clone());
+            if raw_message.is_none() {
+                raw_message = Some(l.message.clone());
             }
 
             if let Some(extracted) = MinecraftRules::extract_from_message(&l.message) {
                 plugin_name = Some(extracted.plugin_name);
                 event_name = extracted.event_name;
+                attribution = AttributionKind::Confirmed;
             } else if let Some(ref src) = l.source {
                 plugin_name = Some(src.clone());
+                attribution = AttributionKind::Confirmed;
             }
         }
 
@@ -101,6 +134,16 @@ impl AggregationEngine {
             &trace,
         );
 
+        if plugin_name.is_none() {
+            if let Some(ref frame) = top_frame {
+                let parts: Vec<&str> = frame.class_name.split('.').collect();
+                if parts.len() >= 3 {
+                    plugin_name = Some(parts[2].to_string());
+                    attribution = AttributionKind::Inferred;
+                }
+            }
+        }
+
         if let Some(ref p) = plugin_name {
             *self.plugin_error_counts.entry(p.clone()).or_insert(0) += 1;
         }
@@ -108,12 +151,20 @@ impl AggregationEngine {
         if let Some(existing) = self.errors_by_signature.get_mut(&hash) {
             existing.record_occurrence(timestamp);
         } else {
+            if let Some(limit) = self.max_signatures {
+                if self.errors_by_signature.len() >= limit {
+                    self.stats.dropped_signatures += 1;
+                    return;
+                }
+            }
+
             let error = AggregatedError::new(
                 hash,
                 trace.primary_exception.clone(),
-                exception_message,
+                raw_message,
                 plugin_name,
                 event_name,
+                attribution,
                 top_frame,
                 timestamp,
                 trace,
@@ -137,5 +188,23 @@ impl AggregationEngine {
         let mut summary: Vec<(&String, &usize)> = self.plugin_error_counts.iter().collect();
         summary.sort_by(|a, b| b.1.cmp(a.1));
         summary
+    }
+
+    pub fn to_report(&self) -> AnalysisReport<'_> {
+        let mut plugins: Vec<PluginCount> = self
+            .plugin_error_counts
+            .iter()
+            .map(|(p, c)| PluginCount {
+                plugin: p.clone(),
+                count: *c,
+            })
+            .collect();
+        plugins.sort_by(|a, b| b.count.cmp(&a.count));
+
+        AnalysisReport {
+            stats: &self.stats,
+            top_plugins: plugins,
+            aggregated_errors: self.aggregated_errors(),
+        }
     }
 }

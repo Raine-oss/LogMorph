@@ -96,6 +96,12 @@ impl TerminalRenderer {
         let _ = writeln!(out);
     }
 
+    pub fn render_banner(&self) {
+        let mut out = String::new();
+        self.format_banner(&mut out);
+        print!("{}", out);
+    }
+
     // Summary Tables
 
     pub fn format_summary(&self, out: &mut String, stats: &AggregationStats, plugin_summary: &[(&String, &usize)]) {
@@ -110,6 +116,9 @@ impl TerminalRenderer {
         let _ = writeln!(out, "├─────────────────────────────┼───────────────────────────┤");
         let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.magenta("Total Exceptions Emitted"), stats.total_exceptions);
         let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.bold("Unique Error Signatures"), stats.unique_signatures);
+        if stats.dropped_signatures > 0 {
+            let _ = writeln!(out, "│ {:<27} │ {:>25} │", self.styler.red("Dropped Signatures (Cap)"), stats.dropped_signatures);
+        }
         let _ = writeln!(out, "└─────────────────────────────┴───────────────────────────┘");
         let _ = writeln!(out);
 
@@ -169,112 +178,231 @@ impl TerminalRenderer {
         let _ = writeln!(out);
 
         for (idx, err) in filtered.iter().enumerate() {
-            let occurrence_badge = self.styler.red(&format!("[Occurrences: {}]", err.occurrences));
-            let hash_badge = self.styler.dim(&format!("(Signature: 0x{:016x})", err.signature_hash));
+            self.format_single_error_brief(out, err, idx + 1);
+        }
+    }
 
+    fn format_single_error_brief(&self, out: &mut String, err: &AggregatedError, index: usize) {
+        let occurrence_badge = self.styler.red(&format!("[Occurrences: {}]", err.occurrences));
+        let hash_badge = self.styler.dim(&format!("(Signature: 0x{:016x})", err.signature_hash));
+
+        let _ = writeln!(
+            out,
+            "{} {} {} {}",
+            self.styler.bold(&format!("#{}", index)),
+            occurrence_badge,
+            self.styler.bold(&self.styler.red(&err.primary_exception)),
+            hash_badge
+        );
+
+        if let Some(ref plugin) = err.plugin_name {
+            let event_info = err
+                .event_name
+                .as_deref()
+                .map(|ev| format!(" on Event {}", self.styler.cyan(ev)))
+                .unwrap_or_default();
+            let attr_info = self.styler.dim(&format!("({})", err.attribution.as_str()));
+            let _ = writeln!(out, "  Plugin: {}{} {}", self.styler.yellow(plugin), event_info, attr_info);
+        }
+
+        if let Some(ref msg) = err.exception_message {
+            let _ = writeln!(out, "  Message: {}", msg);
+        }
+
+        if let (Some(first), Some(last)) = (&err.first_seen, &err.last_seen) {
+            if first == last {
+                let _ = writeln!(out, "  Timestamp: {}", self.styler.dim(first));
+            } else {
+                let _ = writeln!(out, "  Timeline: {} -> {}", self.styler.dim(first), self.styler.dim(last));
+            }
+        }
+
+        if let Some(ref top) = err.top_plugin_frame {
+            let location = match (&top.file_name, top.line_number) {
+                (Some(f), Some(l)) => format!("{}:{}", f, l),
+                (Some(f), None) => f.clone(),
+                _ => "Unknown source".to_string(),
+            };
             let _ = writeln!(
                 out,
-                "{} {} {} {}",
-                self.styler.bold(&format!("#{}", idx + 1)),
-                occurrence_badge,
-                self.styler.bold(&self.styler.red(&err.primary_exception)),
-                hash_badge
+                "  {} {}.{}({})",
+                self.styler.green("↳ Root Plugin Frame:"),
+                self.styler.cyan(&top.class_name),
+                self.styler.bold(&top.method_name),
+                location
             );
+        }
 
-            if let Some(ref plugin) = err.plugin_name {
-                let event_info = err
-                    .event_name
-                    .as_deref()
-                    .map(|ev| format!(" on Event {}", self.styler.cyan(ev)))
-                    .unwrap_or_default();
-                let _ = writeln!(out, "  Plugin: {}{}", self.styler.yellow(plugin), event_info);
-            }
+        let _ = writeln!(out, "  Stack Trace (Key Frames):");
+        let mut plugin_frames_printed = 0;
+        for frame in &err.sample_trace.frames {
+            let is_plugin = FrameFilter::is_plugin_frame(frame);
+            let loc = match (&frame.file_name, frame.line_number) {
+                (Some(f), Some(l)) => format!("{}:{}", f, l),
+                (Some(f), None) => f.clone(),
+                _ => if frame.is_native { "Native Method".to_string() } else { "Unknown".to_string() },
+            };
 
-            if let Some(ref msg) = err.exception_message {
-                let _ = writeln!(out, "  Message: {}", msg);
-            }
-
-            if let (Some(first), Some(last)) = (&err.first_seen, &err.last_seen) {
-                if first == last {
-                    let _ = writeln!(out, "  Timestamp: {}", self.styler.dim(first));
-                } else {
-                    let _ = writeln!(out, "  Timeline: {} -> {}", self.styler.dim(first), self.styler.dim(last));
-                }
-            }
-
-            if let Some(ref top) = err.top_plugin_frame {
-                let location = match (&top.file_name, top.line_number) {
-                    (Some(f), Some(l)) => format!("{}:{}", f, l),
-                    (Some(f), None) => f.clone(),
-                    _ => "Unknown source".to_string(),
-                };
+            if is_plugin {
+                plugin_frames_printed += 1;
                 let _ = writeln!(
                     out,
-                    "  {} {}.{}({})",
-                    self.styler.green("↳ Root Plugin Frame:"),
-                    self.styler.cyan(&top.class_name),
-                    self.styler.bold(&top.method_name),
-                    location
+                    "    {} {}.{}({})",
+                    self.styler.green("▶"),
+                    self.styler.cyan(&frame.class_name),
+                    frame.method_name,
+                    loc
+                );
+            } else if plugin_frames_printed < 2 {
+                let _ = writeln!(
+                    out,
+                    "      {} {}.{}({})",
+                    self.styler.dim("·"),
+                    self.styler.dim(&frame.class_name),
+                    self.styler.dim(&frame.method_name),
+                    self.styler.dim(&loc)
                 );
             }
+        }
 
-            let _ = writeln!(out, "  Stack Trace (Key Frames):");
-            let mut plugin_frames_printed = 0;
-            for frame in &err.sample_trace.frames {
-                let is_plugin = FrameFilter::is_plugin_frame(frame);
-                let loc = match (&frame.file_name, frame.line_number) {
-                    (Some(f), Some(l)) => format!("{}:{}", f, l),
-                    (Some(f), None) => f.clone(),
-                    _ => if frame.is_native { "Native Method".to_string() } else { "Unknown".to_string() },
-                };
-
-                if is_plugin {
-                    plugin_frames_printed += 1;
+        if let Some(ref caused) = err.sample_trace.caused_by {
+            let _ = writeln!(out, "    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception));
+            if let Some(ref cmsg) = caused.exception_message {
+                let _ = writeln!(out, "      {}", cmsg);
+            }
+            for frame in &caused.frames {
+                if FrameFilter::is_plugin_frame(frame) {
+                    let loc = match (&frame.file_name, frame.line_number) {
+                        (Some(f), Some(l)) => format!("{}:{}", f, l),
+                        _ => "Unknown".to_string(),
+                    };
                     let _ = writeln!(
                         out,
-                        "    {} {}.{}({})",
+                        "      {} {}.{}({})",
                         self.styler.green("▶"),
                         self.styler.cyan(&frame.class_name),
                         frame.method_name,
                         loc
                     );
-                } else if plugin_frames_printed < 2 {
+                }
+            }
+        }
+
+        let _ = writeln!(out);
+    }
+
+    // Single Error Inspection
+
+    pub fn format_single_error_detailed(&self, out: &mut String, err: &AggregatedError, index: usize) {
+        let _ = writeln!(out, "{}", self.styler.bold(&format!("=== Detailed Inspection: Error Signature #{} ===", index)));
+        let _ = writeln!(out);
+
+        let occurrence_badge = self.styler.red(&format!("[Occurrences: {}]", err.occurrences));
+        let hash_badge = self.styler.dim(&format!("(Signature: 0x{:016x})", err.signature_hash));
+
+        let _ = writeln!(
+            out,
+            "Primary Exception: {} {} {}",
+            self.styler.bold(&self.styler.red(&err.primary_exception)),
+            occurrence_badge,
+            hash_badge
+        );
+
+        if let Some(ref plugin) = err.plugin_name {
+            let event_info = err
+                .event_name
+                .as_deref()
+                .map(|ev| format!(" (Event: {})", self.styler.cyan(ev)))
+                .unwrap_or_default();
+            let _ = writeln!(out, "Plugin Attribution: {}{} [{}]", self.styler.yellow(plugin), event_info, err.attribution.as_str());
+        }
+
+        let msg_display = err.exception_message.as_deref().unwrap_or("<not available>");
+        let _ = writeln!(out, "Message: {}", msg_display);
+
+        if let (Some(first), Some(last)) = (&err.first_seen, &err.last_seen) {
+            let _ = writeln!(out, "Timeline: First seen at {}, last seen at {}", first, last);
+        }
+
+        if let Some(ref top) = err.top_plugin_frame {
+            let location = match (&top.file_name, top.line_number) {
+                (Some(f), Some(l)) => format!("{}:{}", f, l),
+                _ => "Unknown".to_string(),
+            };
+            let _ = writeln!(
+                out,
+                "Root Plugin Frame: {}.{}({})",
+                self.styler.cyan(&top.class_name),
+                self.styler.bold(&top.method_name),
+                location
+            );
+        }
+
+        let _ = writeln!(out);
+        let _ = writeln!(out, "Full Stack Trace:");
+        for frame in &err.sample_trace.frames {
+            let is_plugin = FrameFilter::is_plugin_frame(frame);
+            let loc = match (&frame.file_name, frame.line_number) {
+                (Some(f), Some(l)) => format!("{}:{}", f, l),
+                _ => if frame.is_native { "Native Method".to_string() } else { "Unknown".to_string() },
+            };
+
+            if is_plugin {
+                let _ = writeln!(
+                    out,
+                    "  {} {}.{}({})",
+                    self.styler.green("▶ [Plugin]"),
+                    self.styler.cyan(&frame.class_name),
+                    frame.method_name,
+                    loc
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "    {} {}.{}({})",
+                    self.styler.dim("[Framework]"),
+                    self.styler.dim(&frame.class_name),
+                    self.styler.dim(&frame.method_name),
+                    self.styler.dim(&loc)
+                );
+            }
+        }
+
+        if let Some(ref caused) = err.sample_trace.caused_by {
+            let _ = writeln!(out);
+            let _ = writeln!(out, "Caused By: {}", self.styler.red(&caused.primary_exception));
+            if let Some(ref cmsg) = caused.exception_message {
+                let _ = writeln!(out, "  Message: {}", cmsg);
+            }
+            for frame in &caused.frames {
+                let is_plugin = FrameFilter::is_plugin_frame(frame);
+                let loc = match (&frame.file_name, frame.line_number) {
+                    (Some(f), Some(l)) => format!("{}:{}", f, l),
+                    _ => "Unknown".to_string(),
+                };
+                if is_plugin {
                     let _ = writeln!(
                         out,
-                        "      {} {}.{}({})",
-                        self.styler.dim("·"),
+                        "  {} {}.{}({})",
+                        self.styler.green("▶ [Plugin]"),
+                        self.styler.cyan(&frame.class_name),
+                        frame.method_name,
+                        loc
+                    );
+                } else {
+                    let _ = writeln!(
+                        out,
+                        "    {} {}.{}({})",
+                        self.styler.dim("[Framework]"),
                         self.styler.dim(&frame.class_name),
                         self.styler.dim(&frame.method_name),
                         self.styler.dim(&loc)
                     );
                 }
             }
-
-            if let Some(ref caused) = err.sample_trace.caused_by {
-                let _ = writeln!(out, "    {} {}", self.styler.magenta("Caused by:"), self.styler.red(&caused.primary_exception));
-                if let Some(ref cmsg) = caused.exception_message {
-                    let _ = writeln!(out, "      {}", cmsg);
-                }
-                for frame in &caused.frames {
-                    if FrameFilter::is_plugin_frame(frame) {
-                        let loc = match (&frame.file_name, frame.line_number) {
-                            (Some(f), Some(l)) => format!("{}:{}", f, l),
-                            _ => "Unknown".to_string(),
-                        };
-                        let _ = writeln!(
-                            out,
-                            "      {} {}.{}({})",
-                            self.styler.green("▶"),
-                            self.styler.cyan(&frame.class_name),
-                            frame.method_name,
-                            loc
-                        );
-                    }
-                }
-            }
-
-            let _ = writeln!(out);
         }
+
+        let _ = writeln!(out);
     }
 
     // Format All Output
