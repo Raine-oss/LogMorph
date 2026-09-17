@@ -5,3 +5,4 @@ plugin/target/
 dist/
 **/*.rs.bk
 Cargo.lock
+.github/
