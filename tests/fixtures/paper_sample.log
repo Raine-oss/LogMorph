@@ -1,0 +1,18 @@
+[12:00:01 INFO]: Starting minecraft server version 1.20.4
+[12:00:02 INFO]: Loading properties
+[12:00:03 INFO]: [Essentials] Enabling Essentials v2.20.1
+[12:00:04 INFO]: [MyCustomPlugin] Enabling MyCustomPlugin v1.4.2
+[12:00:05 ERROR]: Could not pass event PlayerMoveEvent to MyCustomPlugin v1.4.2
+org.bukkit.event.EventException: null
+	at org.bukkit.plugin.java.JavaPluginLoader$1.execute(JavaPluginLoader.java:310) ~[paper-api-1.20.4-R0.1-SNAPSHOT.jar:?]
+	at co.aikar.timings.TimedEventExecutor.execute(TimedEventExecutor.java:78) ~[paper-api-1.20.4-R0.1-SNAPSHOT.jar:?]
+	at org.bukkit.plugin.RegisteredListener.callEvent(RegisteredListener.java:70) ~[paper-api-1.20.4-R0.1-SNAPSHOT.jar:?]
+	at io.papermc.paper.plugin.manager.PaperEventManager.callEvent(PaperEventManager.java:54) ~[paper-1.20.4.jar:git-Paper-497]
+	at com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:45) ~[MyCustomPlugin-1.4.2.jar:?]
+	at net.minecraft.server.network.ServerGamePacketListenerImpl.handleMovePlayer(ServerGamePacketListenerImpl.java:1200) ~[paper-1.20.4.jar:git-Paper-497]
+	at net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:1100) ~[paper-1.20.4.jar:git-Paper-497]
+Caused by: java.lang.NullPointerException: Cannot invoke "org.bukkit.entity.Player.getName()" because "player" is null
+	at com.example.myplugin.services.ScoreboardManager.update(ScoreboardManager.java:88) ~[MyCustomPlugin-1.4.2.jar:?]
+	at com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:43) ~[MyCustomPlugin-1.4.2.jar:?]
+	... 6 more
+[12:00:06 INFO]: Server started in 5.12s

@@ -1,0 +1,25 @@
+[10:00:00 ERROR]: [EconomyPlugin] Failed to save account balance for user 101
+java.sql.SQLException: Connection timed out
+	at com.zaxxer.hikari.pool.PoolBase.getConnection(PoolBase.java:180)
+	at com.economy.plugin.database.AccountDao.save(AccountDao.java:55)
+	at com.economy.plugin.tasks.SyncTask.run(SyncTask.java:22)
+[10:00:01 ERROR]: [EconomyPlugin] Failed to save account balance for user 102
+java.sql.SQLException: Connection timed out
+	at com.zaxxer.hikari.pool.PoolBase.getConnection(PoolBase.java:180)
+	at com.economy.plugin.database.AccountDao.save(AccountDao.java:55)
+	at com.economy.plugin.tasks.SyncTask.run(SyncTask.java:22)
+[10:00:02 ERROR]: [EconomyPlugin] Failed to save account balance for user 103
+java.sql.SQLException: Connection timed out
+	at com.zaxxer.hikari.pool.PoolBase.getConnection(PoolBase.java:180)
+	at com.economy.plugin.database.AccountDao.save(AccountDao.java:55)
+	at com.economy.plugin.tasks.SyncTask.run(SyncTask.java:22)
+[10:00:03 ERROR]: [EconomyPlugin] Failed to save account balance for user 104
+java.sql.SQLException: Connection timed out
+	at com.zaxxer.hikari.pool.PoolBase.getConnection(PoolBase.java:180)
+	at com.economy.plugin.database.AccountDao.save(AccountDao.java:55)
+	at com.economy.plugin.tasks.SyncTask.run(SyncTask.java:22)
+[10:00:04 ERROR]: [EconomyPlugin] Failed to save account balance for user 105
+java.sql.SQLException: Connection timed out
+	at com.zaxxer.hikari.pool.PoolBase.getConnection(PoolBase.java:180)
+	at com.economy.plugin.database.AccountDao.save(AccountDao.java:55)
+	at com.economy.plugin.tasks.SyncTask.run(SyncTask.java:22)

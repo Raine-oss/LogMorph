@@ -1,0 +1,23 @@
+[package]
+name = "logmorph"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "logmorph"
+path = "src/lib.rs"
+
+[[bin]]
+name = "logmorph"
+path = "src/bin/main.rs"
+
+[[bench]]
+name = "stream_benchmark"
+harness = false
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+regex = "1.10"
+
+[dev-dependencies]
+criterion = "0.5"

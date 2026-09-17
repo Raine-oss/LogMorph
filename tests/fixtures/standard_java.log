@@ -1,0 +1,13 @@
+[14:30:00] [Server thread/INFO]: Checking server health
+[14:30:01] [Server thread/ERROR]: Encountered unexpected exception
+java.lang.RuntimeException: Failed to initialize pipeline
+	at com.engine.core.Pipeline.init(Pipeline.java:34)
+	at com.engine.core.Server.start(Server.java:120)
+Caused by: java.io.IOException: Configuration file corrupted
+	at com.engine.config.ConfigLoader.read(ConfigLoader.java:88)
+	at com.engine.core.Pipeline.init(Pipeline.java:30)
+Caused by: java.lang.NullPointerException: Entry 'database.host' is missing
+	at com.engine.config.Parser.parseEntry(Parser.java:12)
+	at com.engine.config.ConfigLoader.read(ConfigLoader.java:82)
+	... 1 more
+[14:30:02] [Server thread/INFO]: Server shutting down
