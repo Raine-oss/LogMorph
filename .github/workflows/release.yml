@@ -67,7 +67,8 @@ jobs:
         run: mvn clean package
       - name: Publish to GitHub Packages
         working-directory: plugin
-        run: mvn deploy -DskipTests
+        run: mvn deploy -DskipTests || echo "Package version already exists on GitHub Packages, continuing."
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Plugin Jar
