@@ -20,11 +20,14 @@ LogMorph is currently in active development.
 - Streaming log parsing with low memory overhead
 - Log level classification (INFO, WARN, ERROR, DEBUG, TRACE)
 - Stack trace multiline grouping and nested `Caused by` extraction
-- Deterministic error signature generation and deduplication
+- Collision-resistant error signatures and deterministic deduplication
+- Smart dynamic normalization preserving semantic numbers (HTTP codes, ports, versions)
+- Explicit attribution states (`confirmed`, `detected_from_stack_frame`, `ambiguous`, `unknown`)
+- Standardized process exit codes (`0`, `1`, `2`, `3`)
 - Command-line interface with subcommands (`analyze`, `summary`, `inspect`, `watch`, `export`)
-- Structured JSON output support (`--format json`) for automated tooling
-- Memory ceiling control via `--max-signatures <N>`
-- Minecraft Paper/Spigot plugin integration with asynchronous execution
+- Structured JSON output support (`--format json` and `export --output <FILE>`)
+- Memory ceiling control via `--max-signatures <N>` with first-seen retention
+- Minecraft Paper/Spigot companion plugin with asynchronous execution and graceful shutdown
 
 ### In Progress
 - Expanded platform packaging (Linux ARM64, macOS)
@@ -135,7 +138,7 @@ Commands:
   analyze   Analyze a log file and display aggregated errors [default]
   summary   Display execution summary tables only
   inspect   Inspect full stack trace and details for a specific error (alias: show)
-  export    Export structured analysis data as JSON
+  export    Export structured analysis data to a file or stdout
   watch     Monitor a log file in real-time as lines arrive
   help      Print this message or the help of the given subcommand(s)
 ```
@@ -152,8 +155,8 @@ logmorph summary logs/latest.log
 # 3. Inspect full stack trace and cause chain of error signature #1
 logmorph inspect logs/latest.log --error 1
 
-# 4. Export structured report as JSON for CI or dashboards
-logmorph export logs/latest.log --format json
+# 4. Export structured JSON report to a file
+logmorph export logs/latest.log --output report.json
 
 # 5. Cap maximum tracked error signatures in memory
 logmorph analyze logs/latest.log --max-signatures 500
@@ -164,27 +167,49 @@ logmorph analyze logs/latest.log --plugin WorldGuard --level ERROR
 
 ---
 
+## Standard Process Exit Codes
+
+For automation and CI/CD pipelines, LogMorph returns standardized exit codes:
+
+| Exit Code | Status | Description |
+| :---: | :--- | :--- |
+| **0** | `SUCCESS` | Log analysis completed normally |
+| **1** | `FILE_NOT_FOUND` | Specified log file does not exist or cannot be opened |
+| **2** | `INVALID_INPUT` | Invalid argument, unknown parameter, or out-of-range inspect index |
+| **3** | `INTERNAL_ERROR` | Internal stream reading failure or unexpected parser error |
+
+---
+
 ## Error Deduplication & Memory Model
 
 When a plugin encounters a repeating error in a game loop or tick event, logs can accumulate thousands of identical stack traces.
 
-### How Signatures are Built
-LogMorph normalizes repeated errors into deterministic 64-bit signatures. A signature incorporates:
-- The primary exception class (e.g. `java.lang.NullPointerException`).
-- Plugin attribution (extracted from log prefix, event marker, or top non-framework class).
-- The root non-framework stack frame (class name, method name, file, line number).
-- Nested `Caused by` exceptions.
+### Smart Normalization
+LogMorph does not blindly strip all numbers. It selectively normalizes purely dynamic parameters:
+- **Normalized to tokens**: UUIDs (`<UUID>`), timestamps (`<TIME>`), hex memory addresses (`<ADDR>`), and 3D player coordinates (`<COORD>`).
+- **Preserved intact**: HTTP status codes (404, 500), network ports (25565, 3306), plugin versions (v1.20.4), and SQL error codes (1045) are kept as part of the error identity.
 
-Dynamic tokens, timestamps, and thread identifiers are excluded to ensure identical issues map to the same signature regardless of when they occur.
+### Collision Protection
+LogMorph uses 64-bit hashes as a fast $O(1)$ index key, but maintains full structural identity keys. If two distinct errors produce the same hash, the engine differentiates them by their structural identity, preventing false merges.
 
-### Memory Behavior
+### Attribution Classification
+Attribution is classified into four explicit states:
+- `confirmed`: Explicitly extracted from Minecraft event failure headers or logger names.
+- `detected_from_stack_frame`: Inferred from a single candidate plugin namespace in non-framework frames.
+- `ambiguous`: Multiple distinct plugin namespaces appear in non-framework frames.
+- `unknown`: No identifiable plugin frames or headers found.
+
+### Memory Ceiling (`--max-signatures`)
 LogMorph processes log lines via buffered streaming without buffering the entire file in memory. Working memory is primarily proportional to the number of **unique error signatures** tracked.
 
 To prevent unbounded memory consumption on files containing tens of thousands of distinct exceptions, pass the `--max-signatures <N>` flag:
 ```bash
 logmorph analyze logs/latest.log --max-signatures 1000
 ```
-When this limit is reached, existing signatures continue accumulating occurrence counts, while new distinct signatures increment the dropped signatures counter without allocating additional entries.
+**Retention Behavior**:
+- When the signature limit is reached, incoming errors matching already tracked signatures continue to have their occurrence counters and timelines updated.
+- New unseen signatures arriving after the limit is reached are dropped, incrementing the `dropped_signatures` counter.
+- The order of log entries determines which signatures are tracked once the cap is reached (first-seen retention).
 
 ---
 
@@ -229,7 +254,7 @@ When this limit is reached, existing signatures continue accumulating occurrence
       ▶ com.example.myplugin.listeners.MoveListener.onPlayerMove(MoveListener.java:43)
 ```
 
-### JSON Output (`--format json`)
+### JSON Schema (`--format json` or `export`)
 ```json
 {
   "stats": {
@@ -256,7 +281,14 @@ When this limit is reached, existing signatures continue accumulating occurrence
       "exception_message": null,
       "plugin_name": "MyCustomPlugin",
       "event_name": "PlayerMoveEvent",
-      "attribution": "Confirmed",
+      "attribution": "confirmed",
+      "top_plugin_frame": {
+        "class_name": "com.example.myplugin.listeners.MoveListener",
+        "method_name": "onPlayerMove",
+        "file_name": "MoveListener.java",
+        "line_number": 45,
+        "is_native": false
+      },
       "occurrences": 1,
       "first_seen": "12:00:05",
       "last_seen": "12:00:05"
@@ -271,6 +303,8 @@ When this limit is reached, existing signatures continue accumulating occurrence
 
 The companion Paper/Spigot plugin follows strict server safety practices:
 - **Asynchronous Execution**: All log analysis and native JNI operations execute on background workers (`Bukkit.getScheduler().runTaskAsynchronously`) to prevent tick lag or server freezes.
+- **Thread Safety**: Command responses return safely to the main thread via scheduler callbacks.
+- **Graceful Shutdown**: All scheduled background tasks are cancelled on plugin disable (`onDisable()`), ensuring clean thread termination during server stops or reloads.
 - **Exception Isolation**: Native Rust routines are wrapped in panic catchers (`std::panic::catch_unwind`) to prevent JVM crashes.
 - **Read-Only**: The plugin only reads log files. It does not modify server configuration, player data, world files, or gameplay behavior.
 

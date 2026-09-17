@@ -1,6 +1,7 @@
 // Frame Filter
 
 use crate::models::stack_trace::{StackFrame, StackTraceBlock};
+use std::collections::HashSet;
 
 // Framework Prefixes
 
@@ -53,6 +54,36 @@ impl FrameFilter {
 
         trace.frames.first().cloned()
     }
+
+    pub fn collect_plugin_namespaces(trace: &StackTraceBlock) -> Vec<String> {
+        let mut frames = Vec::new();
+        Self::collect_plugin_frames(trace, &mut frames);
+
+        let mut namespaces = HashSet::new();
+        for frame in frames {
+            let parts: Vec<&str> = frame.class_name.split('.').collect();
+            if parts.len() >= 3 {
+                let ns = parts[..3].join(".");
+                namespaces.insert(ns);
+            } else if parts.len() >= 2 {
+                let ns = parts[..2].join(".");
+                namespaces.insert(ns);
+            }
+        }
+
+        namespaces.into_iter().collect()
+    }
+
+    fn collect_plugin_frames(trace: &StackTraceBlock, out: &mut Vec<StackFrame>) {
+        for frame in &trace.frames {
+            if Self::is_plugin_frame(frame) {
+                out.push(frame.clone());
+            }
+        }
+        if let Some(ref caused) = trace.caused_by {
+            Self::collect_plugin_frames(caused, out);
+        }
+    }
 }
 
 // Tests
@@ -82,5 +113,31 @@ mod tests {
         );
         assert!(!FrameFilter::is_framework_frame(&plugin_frame));
         assert!(FrameFilter::is_plugin_frame(&plugin_frame));
+    }
+
+    #[test]
+    fn test_collect_plugin_namespaces() {
+        let frame1 = StackFrame::new(
+            "com.pluginA.listener.MyListener".to_string(),
+            "onEvent".to_string(),
+            None,
+            Some(10),
+            false,
+        );
+        let frame2 = StackFrame::new(
+            "com.pluginB.manager.Manager".to_string(),
+            "execute".to_string(),
+            None,
+            Some(20),
+            false,
+        );
+        let block = StackTraceBlock::new(
+            "java.lang.Exception".to_string(),
+            None,
+            vec![frame1, frame2],
+            None,
+        );
+        let namespaces = FrameFilter::collect_plugin_namespaces(&block);
+        assert_eq!(namespaces.len(), 2);
     }
 }

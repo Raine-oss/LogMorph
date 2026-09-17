@@ -1,17 +1,18 @@
 // Aggregation Engine
 
-use crate::engine::fingerprint::FingerprintGenerator;
+use crate::engine::fingerprint::{ErrorSignatureKey, FingerprintGenerator};
+use crate::engine::frame_filter::FrameFilter;
 use crate::engine::minecraft_rules::MinecraftRules;
 use crate::models::error_event::{AggregatedError, AttributionKind};
 use crate::models::log_line::{LogLevel, LogLine};
 use crate::models::stack_trace::StackTraceBlock;
 use crate::parser::state_machine::ParsedEvent;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // Aggregation Stats
 
-#[derive(Debug, Default, Clone, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AggregationStats {
     pub total_lines: usize,
     pub total_log_messages: usize,
@@ -26,7 +27,7 @@ pub struct AggregationStats {
 
 // Plugin Count
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginCount {
     pub plugin: String,
     pub count: usize,
@@ -34,17 +35,17 @@ pub struct PluginCount {
 
 // Analysis Report
 
-#[derive(Debug, Serialize)]
-pub struct AnalysisReport<'a> {
-    pub stats: &'a AggregationStats,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalysisReport {
+    pub stats: AggregationStats,
     pub top_plugins: Vec<PluginCount>,
-    pub aggregated_errors: Vec<&'a AggregatedError>,
+    pub aggregated_errors: Vec<AggregatedError>,
 }
 
 // Engine Implementation
 
 pub struct AggregationEngine {
-    errors_by_signature: HashMap<u64, AggregatedError>,
+    errors_by_key: HashMap<ErrorSignatureKey, AggregatedError>,
     plugin_error_counts: HashMap<String, usize>,
     stats: AggregationStats,
     max_signatures: Option<usize>,
@@ -53,7 +54,7 @@ pub struct AggregationEngine {
 impl AggregationEngine {
     pub fn new() -> Self {
         Self {
-            errors_by_signature: HashMap::new(),
+            errors_by_key: HashMap::new(),
             plugin_error_counts: HashMap::new(),
             stats: AggregationStats::default(),
             max_signatures: None,
@@ -62,7 +63,7 @@ impl AggregationEngine {
 
     pub fn with_max_signatures(max_signatures: Option<usize>) -> Self {
         Self {
-            errors_by_signature: HashMap::new(),
+            errors_by_key: HashMap::new(),
             plugin_error_counts: HashMap::new(),
             stats: AggregationStats::default(),
             max_signatures,
@@ -128,18 +129,30 @@ impl AggregationEngine {
             }
         }
 
-        let (hash, top_frame) = FingerprintGenerator::compute_for_trace(
+        let (key, top_frame) = FingerprintGenerator::compute_for_trace(
             &trace.primary_exception,
             plugin_name.as_deref(),
+            raw_message.as_deref(),
             &trace,
         );
 
         if plugin_name.is_none() {
-            if let Some(ref frame) = top_frame {
-                let parts: Vec<&str> = frame.class_name.split('.').collect();
-                if parts.len() >= 3 {
-                    plugin_name = Some(parts[2].to_string());
-                    attribution = AttributionKind::Inferred;
+            let namespaces = FrameFilter::collect_plugin_namespaces(&trace);
+            if namespaces.len() > 1 {
+                attribution = AttributionKind::Ambiguous;
+                if let Some(ref frame) = top_frame {
+                    let parts: Vec<&str> = frame.class_name.split('.').collect();
+                    if parts.len() >= 3 {
+                        plugin_name = Some(parts[2].to_string());
+                    }
+                }
+            } else if namespaces.len() == 1 {
+                attribution = AttributionKind::DetectedFromStackFrame;
+                if let Some(ref frame) = top_frame {
+                    let parts: Vec<&str> = frame.class_name.split('.').collect();
+                    if parts.len() >= 3 {
+                        plugin_name = Some(parts[2].to_string());
+                    }
                 }
             }
         }
@@ -148,18 +161,18 @@ impl AggregationEngine {
             *self.plugin_error_counts.entry(p.clone()).or_insert(0) += 1;
         }
 
-        if let Some(existing) = self.errors_by_signature.get_mut(&hash) {
+        if let Some(existing) = self.errors_by_key.get_mut(&key) {
             existing.record_occurrence(timestamp);
         } else {
             if let Some(limit) = self.max_signatures {
-                if self.errors_by_signature.len() >= limit {
+                if self.errors_by_key.len() >= limit {
                     self.stats.dropped_signatures += 1;
                     return;
                 }
             }
 
             let error = AggregatedError::new(
-                hash,
+                key.hash,
                 trace.primary_exception.clone(),
                 raw_message,
                 plugin_name,
@@ -169,7 +182,7 @@ impl AggregationEngine {
                 timestamp,
                 trace,
             );
-            self.errors_by_signature.insert(hash, error);
+            self.errors_by_key.insert(key, error);
             self.stats.unique_signatures += 1;
         }
     }
@@ -179,7 +192,7 @@ impl AggregationEngine {
     }
 
     pub fn aggregated_errors(&self) -> Vec<&AggregatedError> {
-        let mut errors: Vec<&AggregatedError> = self.errors_by_signature.values().collect();
+        let mut errors: Vec<&AggregatedError> = self.errors_by_key.values().collect();
         errors.sort_by(|a, b| b.occurrences.cmp(&a.occurrences));
         errors
     }
@@ -190,7 +203,7 @@ impl AggregationEngine {
         summary
     }
 
-    pub fn to_report(&self) -> AnalysisReport<'_> {
+    pub fn to_report(&self) -> AnalysisReport {
         let mut plugins: Vec<PluginCount> = self
             .plugin_error_counts
             .iter()
@@ -201,10 +214,43 @@ impl AggregationEngine {
             .collect();
         plugins.sort_by(|a, b| b.count.cmp(&a.count));
 
+        let mut errors: Vec<AggregatedError> = self.errors_by_key.values().cloned().collect();
+        errors.sort_by(|a, b| b.occurrences.cmp(&a.occurrences));
+
         AnalysisReport {
-            stats: &self.stats,
+            stats: self.stats.clone(),
             top_plugins: plugins,
-            aggregated_errors: self.aggregated_errors(),
+            aggregated_errors: errors,
         }
+    }
+}
+
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_max_signatures_cap() {
+        let mut engine = AggregationEngine::with_max_signatures(Some(2));
+
+        for i in 0..5 {
+            let trace = StackTraceBlock::new(
+                format!("com.example.Exception{}", i),
+                Some(format!("Error number {}", i)),
+                vec![],
+                None,
+            );
+            engine.feed_event(ParsedEvent::ErrorWithTrace {
+                log: None,
+                trace,
+                line_count: 2,
+            });
+        }
+
+        assert_eq!(engine.stats().unique_signatures, 2);
+        assert_eq!(engine.stats().dropped_signatures, 3);
+        assert_eq!(engine.stats().total_exceptions, 5);
     }
 }

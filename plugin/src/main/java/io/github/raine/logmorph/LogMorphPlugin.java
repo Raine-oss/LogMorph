@@ -41,6 +41,7 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
 
     @Override
     public void onDisable() {
+        getServer().getScheduler().cancelTasks(this);
         getLogger().info("LogMorph plugin disabled.");
     }
 
@@ -100,7 +101,14 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
                     false
                 );
 
+                if (!isEnabled()) {
+                    return;
+                }
+
                 Bukkit.getScheduler().runTask(this, () -> {
+                    if (!isEnabled()) {
+                        return;
+                    }
                     if (isConsole) {
                         sender.sendMessage(result);
                     } else {
@@ -113,9 +121,11 @@ public class LogMorphPlugin extends JavaPlugin implements CommandExecutor, TabCo
                     }
                 });
             } catch (Throwable t) {
-                Bukkit.getScheduler().runTask(this, () -> {
-                    sender.sendMessage(ChatColor.RED + "An error occurred while analyzing logs: " + t.getMessage());
-                });
+                if (isEnabled()) {
+                    Bukkit.getScheduler().runTask(this, () -> {
+                        sender.sendMessage(ChatColor.RED + "An error occurred while analyzing logs: " + t.getMessage());
+                    });
+                }
             }
         });
 

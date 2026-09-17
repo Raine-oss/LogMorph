@@ -64,10 +64,13 @@ pub enum Commands {
         no_color: bool,
     },
 
-    #[command(about = "Export structured analysis data")]
+    #[command(about = "Export structured analysis data to a file or stdout")]
     Export {
         #[arg(value_name = "FILE", help = "Path to the log file (reads from stdin if omitted)")]
         file: Option<PathBuf>,
+
+        #[arg(short = 'o', long = "output", value_name = "OUTPUT_FILE", help = "Path to write output file (prints to stdout if omitted)")]
+        output: Option<PathBuf>,
 
         #[arg(long = "format", value_enum, default_value_t = OutputFormat::Json, help = "Export format (json)")]
         format: OutputFormat,

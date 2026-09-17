@@ -1,12 +1,14 @@
 // Attribution
 
 use crate::models::stack_trace::{StackFrame, StackTraceBlock};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AttributionKind {
     Confirmed,
-    Inferred,
+    DetectedFromStackFrame,
+    Ambiguous,
     Unknown,
 }
 
@@ -14,7 +16,8 @@ impl AttributionKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             AttributionKind::Confirmed => "Confirmed",
-            AttributionKind::Inferred => "Inferred from stack frame",
+            AttributionKind::DetectedFromStackFrame => "Detected from stack frame",
+            AttributionKind::Ambiguous => "Ambiguous",
             AttributionKind::Unknown => "Unknown",
         }
     }
@@ -22,7 +25,7 @@ impl AttributionKind {
 
 // Error Event
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AggregatedError {
     pub signature_hash: u64,
     pub primary_exception: String,

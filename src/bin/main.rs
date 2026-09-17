@@ -6,12 +6,39 @@ use logmorph::cli::TerminalRenderer;
 use logmorph::engine::AggregationEngine;
 use logmorph::models::LogLevel;
 use logmorph::parser::{LogStreamReader, ParsedEvent};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::Path;
 use std::process::ExitCode;
 use std::thread::sleep;
 use std::time::Duration;
+
+// Exit Codes
+
+pub struct ExitStatus;
+
+impl ExitStatus {
+    pub const SUCCESS: u8 = 0;
+    pub const FILE_NOT_FOUND: u8 = 1;
+    pub const INVALID_INPUT: u8 = 2;
+    pub const INTERNAL_ERROR: u8 = 3;
+
+    pub fn success() -> ExitCode {
+        ExitCode::from(Self::SUCCESS)
+    }
+
+    pub fn file_not_found() -> ExitCode {
+        ExitCode::from(Self::FILE_NOT_FOUND)
+    }
+
+    pub fn invalid_input() -> ExitCode {
+        ExitCode::from(Self::INVALID_INPUT)
+    }
+
+    pub fn internal_error() -> ExitCode {
+        ExitCode::from(Self::INTERNAL_ERROR)
+    }
+}
 
 // Application Runner
 
@@ -57,9 +84,11 @@ fn main() -> ExitCode {
             no_color,
         }) => run_inspect(file.as_deref(), error_index, no_color),
 
-        Some(Commands::Export { file, format }) => {
-            run_analyze(file.as_deref(), None, None, false, format, None, true)
-        }
+        Some(Commands::Export {
+            file,
+            output,
+            format,
+        }) => run_export(file.as_deref(), output.as_deref(), format),
 
         Some(Commands::Watch {
             file,
@@ -97,13 +126,13 @@ fn run_analyze(
     let result = if let Some(path) = file_path {
         if !path.exists() {
             eprintln!("Error: File not found: {}", path.display());
-            return ExitCode::FAILURE;
+            return ExitStatus::file_not_found();
         }
         match LogStreamReader::from_path(path) {
             Ok(reader) => process_stream(reader, &mut engine, target_level.as_ref()),
             Err(e) => {
                 eprintln!("Error opening file {}: {}", path.display(), e);
-                return ExitCode::FAILURE;
+                return ExitStatus::file_not_found();
             }
         }
     } else {
@@ -113,7 +142,7 @@ fn run_analyze(
 
     if let Err(e) = result {
         eprintln!("Error reading log stream: {}", e);
-        return ExitCode::FAILURE;
+        return ExitStatus::internal_error();
     }
 
     match format {
@@ -123,7 +152,7 @@ fn run_analyze(
                 Ok(json) => println!("{}", json),
                 Err(e) => {
                     eprintln!("Error serializing JSON: {}", e);
-                    return ExitCode::FAILURE;
+                    return ExitStatus::internal_error();
                 }
             }
         }
@@ -133,29 +162,28 @@ fn run_analyze(
         }
     }
 
-    ExitCode::SUCCESS
+    ExitStatus::success()
 }
 
-// Inspect Runner
+// Export Runner
 
-fn run_inspect(file_path: Option<&Path>, error_index: usize, no_color: bool) -> ExitCode {
-    if error_index == 0 {
-        eprintln!("Error: Error index must be 1 or greater.");
-        return ExitCode::FAILURE;
-    }
-
+fn run_export(
+    file_path: Option<&Path>,
+    output_path: Option<&Path>,
+    format: OutputFormat,
+) -> ExitCode {
     let mut engine = AggregationEngine::new();
 
     let result = if let Some(path) = file_path {
         if !path.exists() {
             eprintln!("Error: File not found: {}", path.display());
-            return ExitCode::FAILURE;
+            return ExitStatus::file_not_found();
         }
         match LogStreamReader::from_path(path) {
             Ok(reader) => process_stream(reader, &mut engine, None),
             Err(e) => {
                 eprintln!("Error opening file {}: {}", path.display(), e);
-                return ExitCode::FAILURE;
+                return ExitStatus::file_not_found();
             }
         }
     } else {
@@ -165,7 +193,67 @@ fn run_inspect(file_path: Option<&Path>, error_index: usize, no_color: bool) -> 
 
     if let Err(e) = result {
         eprintln!("Error reading log stream: {}", e);
-        return ExitCode::FAILURE;
+        return ExitStatus::internal_error();
+    }
+
+    let report = engine.to_report();
+    let json_content = match serde_json::to_string_pretty(&report) {
+        Ok(json) => json,
+        Err(e) => {
+            eprintln!("Error serializing JSON: {}", e);
+            return ExitStatus::internal_error();
+        }
+    };
+
+    if let Some(out_file) = output_path {
+        if let Err(e) = fs::write(out_file, json_content) {
+            eprintln!("Error writing export to {}: {}", out_file.display(), e);
+            return ExitStatus::internal_error();
+        }
+        println!("Successfully exported analysis to: {}", out_file.display());
+    } else {
+        match format {
+            OutputFormat::Json => println!("{}", json_content),
+            OutputFormat::Text => {
+                let renderer = TerminalRenderer::new(true);
+                renderer.render_all(&engine, false, None);
+            }
+        }
+    }
+
+    ExitStatus::success()
+}
+
+// Inspect Runner
+
+fn run_inspect(file_path: Option<&Path>, error_index: usize, no_color: bool) -> ExitCode {
+    if error_index == 0 {
+        eprintln!("Error: Error index must be 1 or greater.");
+        return ExitStatus::invalid_input();
+    }
+
+    let mut engine = AggregationEngine::new();
+
+    let result = if let Some(path) = file_path {
+        if !path.exists() {
+            eprintln!("Error: File not found: {}", path.display());
+            return ExitStatus::file_not_found();
+        }
+        match LogStreamReader::from_path(path) {
+            Ok(reader) => process_stream(reader, &mut engine, None),
+            Err(e) => {
+                eprintln!("Error opening file {}: {}", path.display(), e);
+                return ExitStatus::file_not_found();
+            }
+        }
+    } else {
+        let reader = LogStreamReader::from_stdin();
+        process_stream(reader, &mut engine, None)
+    };
+
+    if let Err(e) = result {
+        eprintln!("Error reading log stream: {}", e);
+        return ExitStatus::internal_error();
     }
 
     let errors = engine.aggregated_errors();
@@ -175,7 +263,7 @@ fn run_inspect(file_path: Option<&Path>, error_index: usize, no_color: bool) -> 
             error_index,
             errors.len()
         );
-        return ExitCode::FAILURE;
+        return ExitStatus::invalid_input();
     }
 
     let target_error = errors[error_index - 1];
@@ -184,7 +272,7 @@ fn run_inspect(file_path: Option<&Path>, error_index: usize, no_color: bool) -> 
     renderer.format_single_error_detailed(&mut output, target_error, error_index);
     print!("{}", output);
 
-    ExitCode::SUCCESS
+    ExitStatus::success()
 }
 
 // Watch Runner
@@ -197,7 +285,7 @@ fn run_watch(
 ) -> ExitCode {
     if !file_path.exists() {
         eprintln!("Error: File not found: {}", file_path.display());
-        return ExitCode::FAILURE;
+        return ExitStatus::file_not_found();
     }
 
     let renderer = TerminalRenderer::new(no_color);
@@ -209,12 +297,12 @@ fn run_watch(
         Ok(f) => f,
         Err(e) => {
             eprintln!("Error opening file {}: {}", file_path.display(), e);
-            return ExitCode::FAILURE;
+            return ExitStatus::file_not_found();
         }
     };
 
     let mut reader = BufReader::new(file);
-    let _ = reader.seek(SeekFrom::End(0));
+    let mut current_pos = reader.seek(SeekFrom::End(0)).unwrap_or(0);
 
     let mut parser = logmorph::parser::StateMachineParser::new();
     let mut engine = AggregationEngine::new();
@@ -225,9 +313,16 @@ fn run_watch(
         line_buf.clear();
         match reader.read_line(&mut line_buf) {
             Ok(0) => {
+                if let Ok(meta) = fs::metadata(file_path) {
+                    if meta.len() < current_pos {
+                        let _ = reader.seek(SeekFrom::Start(0));
+                        current_pos = 0;
+                    }
+                }
                 sleep(Duration::from_millis(250));
             }
-            Ok(_) => {
+            Ok(bytes_read) => {
+                current_pos += bytes_read as u64;
                 let trimmed = line_buf.trim_end_matches(&['\r', '\n'][..]);
                 let events = parser.process_line(trimmed);
                 for event in events {
@@ -268,7 +363,7 @@ fn run_watch(
             }
             Err(e) => {
                 eprintln!("Error reading stream: {}", e);
-                return ExitCode::FAILURE;
+                return ExitStatus::internal_error();
             }
         }
     }

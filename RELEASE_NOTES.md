@@ -1,6 +1,6 @@
 # LogMorph v0.1.0 - Initial Release
 
-A zero-overhead, streaming log analyzer and stack trace deduplicator built specifically for Minecraft servers (Paper, Purpur, Spigot) and Java applications.
+A streaming log analyzer and stack trace deduplicator for Minecraft servers (Paper, Purpur, Spigot) and Java applications, built with Rust. Designed for low memory usage, fast processing, and readable error summaries.
 
 This release provides both the **Minecraft Server Plugin** (`.jar`) for server panels like Pterodactyl and the **Standalone CLI Executable** for Linux and VPS environments.
 
@@ -12,7 +12,7 @@ This release provides both the **Minecraft Server Plugin** (`.jar`) for server p
 - Drop-in `.jar` for your server's `plugins/` directory.
 - Works in **Pterodactyl**, Multicraft, and shared hosting panels without requiring SSH access.
 - Native Rust engine embedded directly via safe JNI bindings.
-- **Asynchronous execution**: Log processing runs entirely on background workers and will never drop ticks or freeze server gameplay.
+- **Asynchronous Execution & Safe Lifecycle**: Log processing runs entirely on background workers and cancels gracefully on server stop (`onDisable()`), preventing tick lag or leaks.
 - Commands supported:
   - `/logmorph` or `/lm`: Analyzes `logs/latest.log` and sends full colorized diagnostics to your console.
   - `/lm summary`: Prints condensed statistical summaries.
@@ -20,12 +20,15 @@ This release provides both the **Minecraft Server Plugin** (`.jar`) for server p
 
 ### 2. Standalone Linux CLI (`logmorph-linux-x86_64`)
 - Single self-contained binary for Linux x86_64 systems.
+- Subcommands supported: `analyze`, `summary`, `inspect`, `watch`, and `export`.
+- Standard process exit codes: `0` (Success), `1` (File Not Found), `2` (Invalid Input), `3` (Internal Error).
 - Reads files directly (`logmorph logs/latest.log`) or via stdin pipe (`tail -f logs/latest.log | logmorph`).
-- Constant memory footprint ($O(1)$ stream reading via `BufRead`).
+- Memory ceiling control via `--max-signatures <N>` with first-seen retention.
 
 ### 3. Core Engine Capabilities
-- **Deterministic Fingerprinting**: Generates clean 64-bit signatures based on the exception type and top plugin frame, ignoring dynamic numbers and timestamps.
-- **Deduplication Engine**: Merges thousands of repeating stack traces into unique entries with occurrence counters and first/last seen timelines.
+- **Smart Dynamic Normalization**: Selectively normalizes timestamps, UUIDs, memory addresses, and player coordinates, while preserving semantic numbers (HTTP status codes, network ports, versions, and SQL error codes).
+- **Collision Protection**: 64-bit hash indexed with structural identity keys to ensure distinct errors are never mistakenly merged.
+- **Attribution Classification**: Identifies root cause with explicit states: `confirmed`, `detected_from_stack_frame`, `ambiguous`, and `unknown`.
 - **Framework Frame Filtering**: Automatically distinguishes between Minecraft framework internals (`net.minecraft`, `org.bukkit`, `com.destroystokyo.paper`) and plugin code to pinpoint root causes immediately.
 
 ---
@@ -34,8 +37,8 @@ This release provides both the **Minecraft Server Plugin** (`.jar`) for server p
 
 | Asset File | Platform / Target | SHA-256 Checksum |
 | :--- | :--- | :--- |
-| `LogMorph-0.1.0.jar` | Minecraft Plugin (Paper / Spigot 1.20+) | `9e252ec51ad13b1421acbb9fe4666b2ea2bdc341b00309ca299d718107d33472` |
-| `logmorph-linux-x86_64` | Linux x86_64 Standalone Executable | `35283b4e736537673ed0173f01e71983585920bf09dfdfa07e057ada52909276` |
+| `LogMorph-0.1.0.jar` | Minecraft Plugin (Paper / Spigot 1.20+) | `c8411852ce281a3e792747f5f54b792887d023a228e5936682cb0aab25650d96` |
+| `logmorph-linux-x86_64` | Linux x86_64 Standalone Executable | `603e936a4f210c9785692a2aa6cb7a530036591b48613bfdc9f7ff35901f6e72` |
 
 ---
 
