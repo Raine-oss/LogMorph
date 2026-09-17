@@ -15,7 +15,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Raine-oss/LogMorph</url>
+            <url>https://maven.pkg.github.com/raine-oss/logmorph</url>
         </repository>
     </distributionManagement>
 
