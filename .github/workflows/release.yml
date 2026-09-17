@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build-rust-linux:
@@ -53,6 +54,9 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          server-id: github
+          server-username: ${{ github.actor }}
+          server-password: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
           name: liblogmorph-so
@@ -60,11 +64,16 @@ jobs:
       - name: Build Paper Plugin Jar
         working-directory: plugin
         run: mvn clean package
+      - name: Publish to GitHub Packages
+        working-directory: plugin
+        run: mvn deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Plugin Jar
         uses: actions/upload-artifact@v4
         with:
-          name: LogMorph-0.1.0.jar
-          path: plugin/target/LogMorph-0.1.0.jar
+          name: LogMorph-1.0.0.jar
+          path: plugin/target/LogMorph-1.0.0.jar
 
   publish-release:
     needs: [build-rust-linux, build-rust-windows, build-plugin]
@@ -81,7 +90,8 @@ jobs:
           cp artifacts/logmorph-linux-x86_64/logmorph-linux-x86_64 release-assets/logmorph
           cp artifacts/logmorph-windows-x86_64.exe/logmorph-windows-x86_64.exe release-assets/logmorph-windows-x86_64.exe
           cp artifacts/logmorph-windows-x86_64.exe/logmorph-windows-x86_64.exe release-assets/logmorph.exe
-          cp artifacts/LogMorph-0.1.0.jar/LogMorph-0.1.0.jar release-assets/LogMorph-0.1.0.jar
+          cp artifacts/LogMorph-1.0.0.jar/LogMorph-1.0.0.jar release-assets/LogMorph-1.0.0.jar
+          cp artifacts/LogMorph-1.0.0.jar/LogMorph-1.0.0.jar release-assets/LogMorph.jar
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

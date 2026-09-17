@@ -5,11 +5,19 @@
 
     <groupId>io.github.raine</groupId>
     <artifactId>logmorph-plugin</artifactId>
-    <version>0.1.0</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>LogMorph</name>
     <description>Streaming Minecraft log parser and stack trace deduplicator</description>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Raine-oss/LogMorph</url>
+        </repository>
+    </distributionManagement>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>

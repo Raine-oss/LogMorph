@@ -55,10 +55,11 @@ Choose the method that matches your server hosting setup:
 
 No SSH or root terminal access required. Works directly inside your server panel (including ARM64 Ampere instances).
 
-[![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--0.1.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar)
-[![View Release v0.1.0](https://img.shields.io/badge/GitHub-Release_v0.1.0-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/tag/v0.1.0)
+[![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--1.0.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/LogMorph-1.0.0.jar)
+[![View Release v1.0.0](https://img.shields.io/badge/GitHub-Release_v1.0.0-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/tag/v1.0.0)
+[![GitHub Packages](https://img.shields.io/badge/GitHub_Packages-LogMorph_1.0.0-blue?style=for-the-badge&logo=github&logoColor=white)](https://github.com/users/Raine-oss/packages?repo_name=LogMorph)
 
-1. Download [`LogMorph-0.1.0.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar) (or [`LogMorph.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph.jar)).
+1. Download [`LogMorph-1.0.0.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/LogMorph-1.0.0.jar) (or [`LogMorph.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/LogMorph.jar)).
 2. Upload the `.jar` file into your server's `plugins/` directory.
 3. Restart or reload your server.
 4. Run commands directly in your Pterodactyl console or in-game:
@@ -89,17 +90,17 @@ No SSH or root terminal access required. Works directly inside your server panel
 
 ### Method B: Standalone CLI Binary (VPS, Dedicated Server, or Local PC)
 
-[![Download Linux x86_64](https://img.shields.io/badge/Download_Linux_x86__64-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64)
-[![Download Linux ARM64](https://img.shields.io/badge/Download_Linux_ARM64-logmorph--linux--aarch64-D32F2F?style=for-the-badge&logo=arm&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-aarch64)
-[![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe)
+[![Download Linux x86_64](https://img.shields.io/badge/Download_Linux_x86__64-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/logmorph-linux-x86_64)
+[![Download Linux ARM64](https://img.shields.io/badge/Download_Linux_ARM64-logmorph--linux--aarch64-D32F2F?style=for-the-badge&logo=arm&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/logmorph-linux-aarch64)
+[![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/logmorph-windows-x86_64.exe)
 
 #### Linux (x86_64 or ARM64 / Ampere)
 ```bash
 # For x86_64 Linux:
-curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64
+curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/logmorph-linux-x86_64
 
 # For ARM64 Linux (Oracle Cloud / Ampere / aarch64):
-curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-aarch64
+curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/logmorph-linux-aarch64
 
 # Make it executable
 chmod +x logmorph
@@ -109,7 +110,7 @@ sudo mv logmorph /usr/local/bin/
 ```
 
 #### Windows
-1. Download [`logmorph-windows-x86_64.exe`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe).
+1. Download [`logmorph-windows-x86_64.exe`](https://github.com/Raine-oss/LogMorph/releases/download/v1.0.0/logmorph-windows-x86_64.exe).
 2. Place it in your server folder or run it from Command Prompt / PowerShell:
 ```cmd
 logmorph-windows-x86_64.exe analyze logs\latest.log
