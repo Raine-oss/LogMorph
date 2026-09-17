@@ -20,10 +20,10 @@ Choose the method that matches your server hosting setup:
 
 No SSH or root terminal access required. Works directly inside your server panel.
 
-[![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--0.1.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/latest/download/LogMorph-0.1.0.jar)
-[![View All Releases](https://img.shields.io/badge/GitHub-View_All_Releases-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases)
+[![Download Plugin Jar](https://img.shields.io/badge/Download_Plugin-LogMorph--0.1.0.jar-2ea44f?style=for-the-badge&logo=java&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar)
+[![View Release v0.1.0](https://img.shields.io/badge/GitHub-Release_v0.1.0-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/tag/v0.1.0)
 
-1. Click the button above to download `LogMorph-0.1.0.jar`.
+1. Click the button above to download [`LogMorph-0.1.0.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar) (or [`LogMorph.jar`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph.jar)).
 2. Upload the `.jar` file into your server's `plugins/` directory.
 3. Restart or reload your server.
 4. Run commands directly in your Pterodactyl console or in-game:
@@ -47,13 +47,13 @@ Analysis runs entirely on an asynchronous background worker and will never freez
 
 ### Method B: Standalone CLI Binary (VPS, Dedicated Server, or Local PC)
 
-[![Download Linux Binary](https://img.shields.io/badge/Download_Linux-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph-linux-x86_64)
-[![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph-windows-x86_64.exe)
+[![Download Linux Binary](https://img.shields.io/badge/Download_Linux-logmorph--linux--x86__64-333333?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64)
+[![Download Windows Binary](https://img.shields.io/badge/Download_Windows-logmorph--windows--x86__64.exe-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe)
 
-#### Linux
+#### Linux (Direct Download & Run)
 ```bash
-# Download the latest binary directly
-curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/latest/download/logmorph-linux-x86_64
+# Download the v0.1.0 Linux executable
+curl -L -o logmorph https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64
 
 # Make it executable
 chmod +x logmorph
@@ -62,8 +62,8 @@ chmod +x logmorph
 sudo mv logmorph /usr/local/bin/
 ```
 
-#### Windows
-1. Click the button above to download `logmorph-windows-x86_64.exe`.
+#### Windows (Direct Download & Run)
+1. Click the button above to download [`logmorph-windows-x86_64.exe`](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe).
 2. Place it in your server folder or run it from Command Prompt / PowerShell:
 ```cmd
 logmorph-windows-x86_64.exe logs\latest.log
@@ -92,6 +92,19 @@ logmorph logs/latest.log --level ERROR
 # Disable colors for plain text files or script outputs
 logmorph logs/latest.log --no-color
 ```
+
+---
+
+## All Available Release Assets (v0.1.0)
+
+All builds for version `v0.1.0` are available on the [Release v0.1.0 Page](https://github.com/Raine-oss/LogMorph/releases/tag/v0.1.0):
+
+| Platform / Environment | File Name | Direct Download Link |
+| :--- | :--- | :--- |
+| **Minecraft Server Plugin** | `LogMorph-0.1.0.jar` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph-0.1.0.jar) |
+| **Minecraft Server Plugin (Standard)** | `LogMorph.jar` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/LogMorph.jar) |
+| **Linux CLI (x86_64)** | `logmorph-linux-x86_64` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-linux-x86_64) |
+| **Windows CLI (x86_64)** | `logmorph-windows-x86_64.exe` | [Download](https://github.com/Raine-oss/LogMorph/releases/download/v0.1.0/logmorph-windows-x86_64.exe) |
 
 ---
 
