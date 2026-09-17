@@ -208,3 +208,45 @@ impl StateMachineParser {
         events
     }
 }
+
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_state_machine_simple_log_flow() {
+        let mut sm = StateMachineParser::new();
+        let evs1 = sm.process_line("[10:00:00 INFO]: First line");
+        assert!(evs1.is_empty()); // PendingLog
+
+        let evs2 = sm.process_line("[10:00:01 INFO]: Second line");
+        assert_eq!(evs2.len(), 1); // First line emitted
+        match &evs2[0] {
+            ParsedEvent::Line(l) => assert_eq!(l.message, "First line"),
+            _ => panic!("Expected Line"),
+        }
+
+        let evs3 = sm.finish();
+        assert_eq!(evs3.len(), 1); // Second line emitted on finish
+        match &evs3[0] {
+            ParsedEvent::Line(l) => assert_eq!(l.message, "Second line"),
+            _ => panic!("Expected Line"),
+        }
+    }
+
+    #[test]
+    fn test_state_machine_error_with_trace() {
+        let mut sm = StateMachineParser::new();
+        sm.process_line("[10:00:00 ERROR]: Something broke");
+        sm.process_line("java.lang.NullPointerException: Object is null");
+        sm.process_line("\tat com.example.Test.run(Test.java:15)");
+        sm.process_line("Caused by: java.lang.IllegalArgumentException: Bad arg");
+        sm.process_line("\tat com.example.Test.init(Test.java:5)");
+        sm.process_line("[10:00:01 INFO]: Server started");
+
+        let finished = sm.finish();
+        assert_eq!(finished.len(), 1); // Final info log
+    }
+}

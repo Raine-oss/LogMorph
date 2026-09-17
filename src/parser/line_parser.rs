@@ -134,3 +134,90 @@ impl LineParser {
         ParsedLine::Text(line.to_string())
     }
 }
+
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_single_bracket_log() {
+        let line = "[12:34:56 INFO]: Hello world";
+        let parsed = LineParser::parse(line);
+        match parsed {
+            ParsedLine::Log(log) => {
+                assert_eq!(log.timestamp.as_deref(), Some("12:34:56"));
+                assert_eq!(log.level, LogLevel::Info);
+                assert_eq!(log.message, "Hello world");
+            }
+            _ => panic!("Expected ParsedLine::Log"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multi_bracket_log() {
+        let line = "[12:34:56] [Server thread/WARN] [MyPlugin]: Warning message";
+        let parsed = LineParser::parse(line);
+        match parsed {
+            ParsedLine::Log(log) => {
+                assert_eq!(log.timestamp.as_deref(), Some("12:34:56"));
+                assert_eq!(log.level, LogLevel::Warn);
+                assert_eq!(log.thread_name.as_deref(), Some("Server thread"));
+                assert_eq!(log.source.as_deref(), Some("MyPlugin"));
+                assert_eq!(log.message, "Warning message");
+            }
+            _ => panic!("Expected ParsedLine::Log"),
+        }
+    }
+
+    #[test]
+    fn test_parse_stack_frame() {
+        let line = "\tat com.example.plugin.Main.onEnable(Main.java:42)";
+        let parsed = LineParser::parse(line);
+        match parsed {
+            ParsedLine::Frame(frame) => {
+                assert_eq!(frame.class_name, "com.example.plugin.Main");
+                assert_eq!(frame.method_name, "onEnable");
+                assert_eq!(frame.file_name.as_deref(), Some("Main.java"));
+                assert_eq!(frame.line_number, Some(42));
+                assert!(!frame.is_native);
+            }
+            _ => panic!("Expected ParsedLine::Frame"),
+        }
+    }
+
+    #[test]
+    fn test_parse_native_stack_frame() {
+        let line = "\tat java.lang.ClassLoader.loadLibrary(Native Method)";
+        let parsed = LineParser::parse(line);
+        match parsed {
+            ParsedLine::Frame(frame) => {
+                assert_eq!(frame.class_name, "java.lang.ClassLoader");
+                assert_eq!(frame.method_name, "loadLibrary");
+                assert!(frame.is_native);
+            }
+            _ => panic!("Expected ParsedLine::Frame"),
+        }
+    }
+
+    #[test]
+    fn test_parse_caused_by() {
+        let line = "Caused by: java.io.IOException: Permission denied";
+        let parsed = LineParser::parse(line);
+        match parsed {
+            ParsedLine::CausedBy { exception, message } => {
+                assert_eq!(exception, "java.io.IOException");
+                assert_eq!(message.as_deref(), Some("Permission denied"));
+            }
+            _ => panic!("Expected ParsedLine::CausedBy"),
+        }
+    }
+
+    #[test]
+    fn test_parse_more_frames() {
+        let line = "\t... 14 more";
+        let parsed = LineParser::parse(line);
+        assert_eq!(parsed, ParsedLine::MoreFrames(14));
+    }
+}
